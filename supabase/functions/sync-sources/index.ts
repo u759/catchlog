@@ -1,13 +1,14 @@
-// Refreshes reference data (lakes, depths, depth maps, species-per-lake) from public sources.
+// Refreshes reference data (lakes, depths, depth maps, species-per-lake, species summaries/photos) from public sources.
 // Invoked every 10 minutes by pg_cron (see migration *_sync_sources_cron.sql) with a shared secret.
 // Each invocation works on due sources page by page within a time budget; progress is saved in
 // public.data_sources.state so long refreshes continue on the next invocation.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { bcAdapters } from './adapters/bc.ts';
+import { wikiSpecies } from './adapters/wiki.ts';
 import type { Adapter, AdapterState } from './adapters/types.ts';
 
-const ADAPTERS: Record<string, Adapter> = Object.fromEntries([...bcAdapters].map((a) => [a.key, a]));
+const ADAPTERS: Record<string, Adapter> = Object.fromEntries([...bcAdapters, wikiSpecies].map((a) => [a.key, a]));
 const TIME_BUDGET_MS = 100_000; // stay well under the 150 s wall-clock limit
 const LOCK_STALE_MS = 5 * 60_000;
 
@@ -80,7 +81,7 @@ Deno.serve(async (req) => {
         await db.from('data_sources').update({ state }).eq('key', source.key); // checkpoint each page
         if (Date.now() - started > TIME_BUDGET_MS) {
           await db.from('data_sources').update({ running_since: null }).eq('key', source.key);
-          log.push({ source: source.key, done: false, state });
+          log.push({ source: source.key, done: false, at: state.after ?? state.start ?? null });
           break;
         }
       }

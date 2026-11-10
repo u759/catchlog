@@ -60,7 +60,7 @@ The FishBase licence is non-commercial. Selling the app would need permission fr
 
 | Job | Schedule | What |
 |---|---|---|
-| `sync-sources` (pg_cron → Edge Function) | every 10 min | Refreshes due sources: BC lakes (180 d), lake depths + depth maps (90 d), fish observations (30 d). Progress in `public.data_sources`. |
+| `sync-sources` (pg_cron → Edge Function) | every 10 min | Refreshes due sources: BC lakes (180 d), lake depths + depth maps (90 d), fish observations (30 d), Wikipedia summaries + Commons photos (30 d). Progress in `public.data_sources`. |
 
 Secrets: `CRON_SECRET` (function secret + Vault `sync_sources_cron_secret`), `FISHIAL_CLIENT_ID/SECRET`.
 

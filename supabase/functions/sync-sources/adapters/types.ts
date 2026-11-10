@@ -18,17 +18,22 @@ export type Adapter = {
 export const USER_AGENT = 'CatchLog/1.0 (non-commercial hobby app; github.com/u759/catchlog)';
 
 export async function fetchWithRetry(url: string, init: RequestInit = {}, attempts = 3): Promise<Response> {
+  const host = new URL(url).host;
   let last: unknown;
   for (let i = 0; i < attempts; i++) {
+    let wait = 1000 * 2 ** i;
     try {
       const res = await fetch(url, { ...init, headers: { 'User-Agent': USER_AGENT, ...(init.headers ?? {}) } });
       if (res.ok) return res;
-      if (res.status < 500 && res.status !== 429) throw new Error(`${res.status} ${await res.text().then((t) => t.slice(0, 200))}`);
-      last = new Error(`HTTP ${res.status}`);
+      if (res.status < 500 && res.status !== 429) throw new Error(`${host} ${res.status} ${await res.text().then((t) => t.slice(0, 200))}`);
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      if (retryAfter > 0) wait = Math.min(retryAfter, 30) * 1000;
+      await res.body?.cancel();
+      last = new Error(`${host} HTTP ${res.status}`);
     } catch (e) {
       last = e;
     }
-    await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, wait));
   }
   throw last instanceof Error ? last : new Error(String(last));
 }

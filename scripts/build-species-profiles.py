@@ -4,10 +4,8 @@ Sources and licences:
   - FishBase v26.06 (Froese & Pauly, eds.), CC BY-NC 4.0 (non-commercial). Parquet tables from
     https://data.source.coop/cboettig/fishbase/fb/v26.06/parquet/<table>.parquet
     Used: species, ecology, estimate, spawning, morphdat, fooditems, country, stocks.
-  - Wikidata (CC0): P938 = FishBase species ID -> item, P18 image, English Wikipedia sitelink.
-  - Wikipedia (CC BY-SA 4.0): lead summary via https://en.wikipedia.org/api/rest_v1/page/summary/<title>.
-    Attribution = link to the article (summary_url).
-  - Wikimedia Commons (per-file free licences): image + thumbnail URLs, author, licence, file page.
+  Wikipedia summaries and Commons photos are not built here: the sync-sources Edge Function refreshes them
+  automatically (adapters/wiki.ts).
 
 Usage:
   python build-species-profiles.py <fishbase_parquet_dir> <out.sql>      (requires duckdb)
@@ -18,10 +16,6 @@ import html
 import json
 import re
 import sys
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 
 import duckdb
@@ -30,7 +24,6 @@ FB_DIR = Path(sys.argv[1])
 OUT = Path(sys.argv[2])
 REPO = Path(__file__).resolve().parent.parent
 SEED = REPO / 'supabase/migrations/20261110030000_species_canada.sql'
-UA = 'CatchLog/0.1 (hobby, non-commercial; species profile builder)'
 
 # ── species ids ────────────────────────────────────────────────────────────
 def sql_tuple(line):
@@ -93,31 +86,6 @@ def clean(text, limit=None):
     return t
 
 
-def http_json(url, data=None, tries=6):
-    for attempt in range(tries):
-        try:
-            req = urllib.request.Request(url, data=data, headers={'User-Agent': UA, 'Accept': 'application/json'})
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return json.load(r)
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
-            if e.code in (429, 500, 502, 503, 504) and attempt < tries - 1:
-                retry_after = e.headers.get('Retry-After')
-                wait = int(retry_after) if retry_after and retry_after.isdigit() else 2 ** attempt * 2
-                if e.code == 429:
-                    wait = max(wait, 65)  # WDQS may limit to 1 request/minute
-                time.sleep(wait)
-                continue
-            raise
-        except (urllib.error.URLError, TimeoutError):
-            if attempt < tries - 1:
-                time.sleep(2 ** attempt * 2)
-                continue
-            raise
-    return None
-
-
 # ── FishBase ───────────────────────────────────────────────────────────────
 con = duckdb.connect()
 P = lambda t: f"'{FB_DIR}/{t}.parquet'"
@@ -170,79 +138,6 @@ for code, food, _ in food_rows:
     if name not in lst and len(lst) < 5:
         lst.append(name)
 
-# ── Wikidata ───────────────────────────────────────────────────────────────
-wd = {}
-fb_ids = [str(c) for c in codes]
-for i in range(0, len(fb_ids), 1500):  # one POST for all ids (WDQS can be rate-limited to 1 req/min)
-    vals = ' '.join(f'"{c}"' for c in fb_ids[i:i + 1500])
-    query = f"""SELECT ?fb ?item ?img ?en WHERE {{ VALUES ?fb {{ {vals} }} ?item wdt:P938 ?fb .
-      OPTIONAL {{ ?item wdt:P18 ?img }}
-      OPTIONAL {{ ?en schema:about ?item; schema:isPartOf <https://en.wikipedia.org/> }} }}"""
-    res = http_json('https://query.wikidata.org/sparql?format=json',
-                    data=urllib.parse.urlencode({'query': query}).encode()) or {'results': {'bindings': []}}
-    for b in res['results']['bindings']:
-        fb = int(b['fb']['value'])
-        e = wd.setdefault(fb, {})
-        e.setdefault('item', b['item']['value'].rsplit('/', 1)[-1])
-        if 'img' in b and 'img' not in e:
-            e['img'] = urllib.parse.unquote(b['img']['value'].rsplit('/', 1)[-1])
-        if 'en' in b and 'en' not in e:
-            e['en'] = urllib.parse.unquote(b['en']['value'].rsplit('/', 1)[-1])
-    time.sleep(1)
-print(f'wikidata: {len(wd)} items', file=sys.stderr)
-
-# ── Commons image info (batched) ───────────────────────────────────────────
-files = sorted({e['img'] for e in wd.values() if 'img' in e})
-commons = {}
-for i in range(0, len(files), 50):
-    titles = '|'.join('File:' + f for f in files[i:i + 50])
-    url = ('https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo'
-           '&iiprop=url|extmetadata&iiurlwidth=480&titles=' + urllib.parse.quote(titles))
-    res = http_json(url) or {'query': {'pages': []}}
-    norm = {n['to']: n['from'] for n in res['query'].get('normalized', [])}
-    for page in res['query']['pages']:
-        info = (page.get('imageinfo') or [None])[0]
-        if not info:
-            continue
-        meta = info.get('extmetadata', {})
-        title = norm.get(page['title'], page['title'])
-        commons[title.split(':', 1)[1].replace('_', ' ')] = {
-            'url': info.get('url'),
-            'thumb': info.get('thumburl') or info.get('url'),
-            'page': info.get('descriptionurl'),
-            'author': clean((meta.get('Artist') or {}).get('value'), 200),
-            'license': clean((meta.get('LicenseShortName') or {}).get('value'), 60),
-        }
-    time.sleep(0.3)
-print(f'commons: {len(commons)} images', file=sys.stderr)
-
-# ── Wikipedia summaries (batched: 20 titles per request) ─────────────────
-summaries = {}
-titles = {fb: e['en'] for fb, e in wd.items() if 'en' in e}
-items = list(titles.items())
-for i in range(0, len(items), 20):
-    chunk = items[i:i + 20]
-    params = urllib.parse.urlencode({
-        'action': 'query', 'format': 'json', 'formatversion': 2, 'redirects': 1,
-        'prop': 'extracts|info|pageprops', 'exintro': 1, 'explaintext': 1, 'exlimit': 'max',
-        'inprop': 'url', 'ppprop': 'disambiguation', 'titles': '|'.join(t for _, t in chunk)})
-    res = http_json('https://en.wikipedia.org/w/api.php?' + params) or {}
-    q_ = res.get('query', {})
-    alias = {}
-    for m in q_.get('normalized', []) + q_.get('redirects', []):
-        alias[m['from']] = m['to']
-    pages = {pg['title']: pg for pg in q_.get('pages', [])}
-    for fb, title in chunk:
-        t = title
-        for _ in range(3):
-            t = alias.get(t, t)
-        pg = pages.get(t)
-        if pg and pg.get('extract') and 'disambiguation' not in (pg.get('pageprops') or {}):
-            summaries[fb] = (clean(pg['extract'], 700), pg.get('fullurl'))
-    time.sleep(0.5)
-    print(f'wikipedia {i + len(chunk)}/{len(items)}', file=sys.stderr)
-
-
 # ── assemble ───────────────────────────────────────────────────────────────
 def num(v, cast=float):
     if v is None:
@@ -256,10 +151,9 @@ def num(v, cast=float):
     return cast(round(f)) if cast is int else round(f, 2)
 
 
-COLS = ['species_id', 'summary', 'summary_url', 'habitat', 'environment', 'migration', 'depth_min_m', 'depth_max_m',
+COLS = ['species_id', 'habitat', 'environment', 'migration', 'depth_min_m', 'depth_max_m',
         'temp_pref_min_c', 'temp_pref_max_c', 'spawning_months', 'feeding', 'diet', 'id_features', 'max_weight_g',
-        'longevity_years', 'iucn_status', 'canada_status', 'canada_notes', 'image_url', 'image_thumb_url',
-        'image_author', 'image_license', 'image_page_url', 'wikidata_id']
+        'longevity_years', 'iucn_status', 'canada_status', 'canada_notes']
 
 rows = []
 for sid, fb in species.items():
@@ -296,14 +190,6 @@ for sid, fb in species.items():
             status, notes = fb_country[fb]
             r['canada_status'] = clean(status)
             r['canada_notes'] = clean(notes, 400)
-        e = wd.get(fb, {})
-        r['wikidata_id'] = e.get('item')
-        if fb in summaries:
-            r['summary'], r['summary_url'] = summaries[fb]
-        img = commons.get(e.get('img', '').replace('_', ' ')) if e.get('img') else None
-        if img and img['url']:
-            r['image_url'], r['image_thumb_url'], r['image_page_url'] = img['url'], img['thumb'], img['page']
-            r['image_author'], r['image_license'] = img['author'], img['license']
     rows.append(r)
 
 
@@ -319,8 +205,7 @@ def q(v):
 
 with OUT.open('w', encoding='utf-8') as out:
     out.write('-- Species profiles (Dex / species pages). Generated by scripts/build-species-profiles.py; do not edit.\n')
-    out.write('-- FishBase v26.06 (Froese & Pauly, eds.), CC BY-NC 4.0 | Wikipedia summaries CC BY-SA 4.0 (link: summary_url)\n')
-    out.write('-- Wikidata CC0 | Wikimedia Commons images: per-file licence + author in image_license / image_author.\n\n')
+    out.write('-- FishBase v26.06 (Froese & Pauly, eds.), CC BY-NC 4.0. Wikipedia/Commons fields are refreshed by sync-sources.\n\n')
     for i in range(0, len(rows), 200):
         batch = rows[i:i + 200]
         out.write(f"insert into public.species_profiles ({', '.join(COLS)}) values\n")

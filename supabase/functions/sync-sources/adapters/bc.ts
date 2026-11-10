@@ -118,7 +118,7 @@ export const bcFishObservations: Adapter = {
       wfsUrl({
         typeNames: 'pub:WHSE_FISH.FISS_FISH_OBSRVTN_PNT_SP',
         outputFormat: 'csv',
-        propertyName: 'WATERBODY_IDENTIFIER,SPECIES_CODE,OBSERVATION_DATE',
+        propertyName: 'WATERBODY_IDENTIFIER,SPECIES_CODE,SPECIES_NAME,OBSERVATION_DATE',
         CQL_FILTER: "WATERBODY_TYPE='Lake'",
         sortBy: 'OBJECTID',
         startIndex: String(start),
@@ -127,14 +127,14 @@ export const bcFishObservations: Adapter = {
     );
     const records = parseCsv(await res.text(), { skipFirstRow: true }) as Record<string, string>[];
     // Aggregate this page to (lake, species) before sending.
-    const agg = new Map<string, { key_value: string; alias: string; n: number; first: string | null; last: string | null }>();
+    const agg = new Map<string, { key_value: string; alias: string; name: string | null; n: number; first: string | null; last: string | null }>();
     for (const r of records) {
       const lake = r.WATERBODY_IDENTIFIER?.trim();
       const code = r.SPECIES_CODE?.trim();
       if (!lake || !code) continue;
       const date = r.OBSERVATION_DATE ? r.OBSERVATION_DATE.slice(0, 10) : null;
       const k = `${lake}|${code}`;
-      const a = agg.get(k) ?? { key_value: lake, alias: code, n: 0, first: date, last: date };
+      const a = agg.get(k) ?? { key_value: lake, alias: code, name: r.SPECIES_NAME?.trim() || null, n: 0, first: date, last: date };
       a.n += 1;
       if (date && (!a.first || date < a.first)) a.first = date;
       if (date && (!a.last || date > a.last)) a.last = date;

@@ -19,7 +19,8 @@ Anything that can grow pages: local lists use a growing `LIMIT`; server lists us
 
 ## Species data
 Canadian fish from Wild Species 2020 (gov't) + FishBase v26.06 (CC BY-NC: non-commercial; selling the app needs FishBase permission). Built by `scripts/build-species-seed.py`, synced to the device once then by delta. Search is local fuzzy (Fuse.js).
-Profiles (Wikipedia summary, Commons photo, FishBase habitat/diet/ID) are a snapshot built by `scripts/build-species-profiles.py`, joined by ID (FishBase SpecCode → Wikidata P938 → enwiki + P18), not by name. They are not auto-refreshed: rerun the script and add a new migration when FishBase releases (about yearly).
+**Linking is by IDs the sources maintain, never hand-made name mappings.** Wikipedia summaries and Commons photos refresh every 30 days via the `wiki-species` adapter (species.fishbase_id → Wikidata P938 → enwiki sitelink + P18). FishBase fields (habitat, diet, spawning, ID features) and the species list are a snapshot (`scripts/build-species-*.py`): FishBase releases about yearly and Wild Species every 5 years with format changes, so automating them isn't worth the code. Fishial results (V3) will match on scientific name, falling back to FishBase's synonyms.
+The one stored mapping is `species_aliases` (BC fish codes → species), generated from BC's own code table, because BC observations carry only a BC code and common name. Codes not in it fall back to BC's common name, so new codes resolve without updating it.
 
 ## Friends
 Friend codes are 8 chars, hidden by column privileges; requests only via `send_friend_request` RPC (online). Profiles visible only to self, friends/pending, and owners of public catches. One friendship row per pair.
