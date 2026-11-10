@@ -153,4 +153,63 @@ export const bcFishObservations: Adapter = {
   },
 };
 
-export const bcAdapters = [bcLakes, bcLakeSurveys, bcDepthMaps, bcFishObservations];
+/**
+ * BC fish species codes (e.g. 'RB' = Rainbow Trout) from BC's Fish Information Data Query, used to link
+ * fish observations to species. Each code links through the two names BC publishes for it:
+ * its scientific name (looked up in FishBase's own name list) or its common name. A code whose two names
+ * point to different species is skipped. (User decision 2026-11-10: BC's list has typos in scientific
+ * names and local common names, so either field alone misses species like Walleye or Steelhead.)
+ */
+export const bcFishCodes: Adapter = {
+  key: 'bc-fish-codes',
+  async step(db) {
+    const FIDQ = 'https://a100.gov.bc.ca/pub/fidq';
+    const page = await fetchWithRetry(`${FIDQ}/viewFishSpecies.do`);
+    const cookie = page.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+    await page.body?.cancel();
+    const search = await fetchWithRetry(`${FIDQ}/searchFishSpecies.do`, {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ numSearchResults: '-1', 'searchCriteria.typeCode': '', 'searchCriteria.commonName': '',
+        'searchCriteria.speciesCode': '', 'searchCriteria.scientificName': '' }),
+    });
+    await search.body?.cancel();
+    const csv = await (await fetchWithRetry(`${FIDQ}/exportFishSpecies.do`, { headers: { Cookie: cookie } })).text();
+    const codes = parseCsv(csv, { skipFirstRow: true }) as Record<string, string>[];
+    if (codes.length < 50) throw new Error(`BC fish code list looks incomplete (${codes.length} rows)`);
+
+    const bySci = new Map<string, string>();
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db.from('species_aliases').select('alias, species_id').eq('alias_type', 'scientific')
+        .order('alias').range(from, from + 999);
+      if (error) throw new Error(error.message);
+      for (const r of data) bySci.set(r.alias, r.species_id);
+      if (data.length < 1000) break;
+    }
+    const byCommon = new Map<string, string | null>(); // null = name shared by two species
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db.from('species').select('id, common_name').order('id').range(from, from + 999);
+      if (error) throw new Error(error.message);
+      for (const r of data) {
+        const k = r.common_name.toLowerCase();
+        byCommon.set(k, byCommon.has(k) ? null : r.id);
+      }
+      if (data.length < 1000) break;
+    }
+
+    const rows: { alias: string; species_id: string }[] = [];
+    for (const c of codes) {
+      const code = c.SPECIES_CODE?.trim();
+      if (!code) continue;
+      const a = c.SCIENTIFIC_NAME ? bySci.get(c.SCIENTIFIC_NAME.trim()) : undefined;
+      const b = c.COMMON_NAME ? byCommon.get(c.COMMON_NAME.trim().toLowerCase()) ?? undefined : undefined;
+      if (a && b && a !== b) continue;
+      const id = a ?? b;
+      if (id) rows.push({ alias: code, species_id: id });
+    }
+    await rpc(db, 'replace_species_aliases', { p_type: 'bc-fish-code', p_rows: rows });
+    return { state: {}, done: true, rows: rows.length };
+  },
+};
+
+export const bcAdapters = [bcLakes, bcLakeSurveys, bcDepthMaps, bcFishCodes, bcFishObservations];
