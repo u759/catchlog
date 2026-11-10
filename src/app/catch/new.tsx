@@ -38,7 +38,13 @@ import { useLocalPhotoUri } from '@/lib/sync/photos';
 import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { useGearList } from '@/features/gear/hooks';
 import { isLure } from '@/features/gear/taxonomy';
-import { detectWaterbody, speciesInWaterbody, useWaterbody, type Waterbody } from '@/features/waterbodies/hooks';
+import {
+  detectWaterbody,
+  speciesInWaterbody,
+  useWaterbody,
+  type Waterbody,
+  waterbodyAtOnline,
+} from '@/features/waterbodies/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
 import {
@@ -159,7 +165,8 @@ function CatchForm({
   );
   const [placeName, setPlaceName] = useState<string | null>(existing?.place_name ?? null);
   const [locating, setLocating] = useState(!isEdit && !lakeId);
-  const [waterbody, setWaterbody] = useState(existing?.waterbody ?? presetLake?.name ?? '');
+  // Free-text spot ("north bay"). The lake itself is linked by position, not typed.
+  const [waterbody, setWaterbody] = useState(existing?.waterbody ?? '');
   const [weather, setWeather] = useState<Weather | null>(isWeather(existing?.weather) ? existing.weather : null);
   const [lure, setLure] = useState(existing?.lure ?? '');
   const [line, setLine] = useState(existing?.line_lb != null ? String(existing.line_lb) : '');
@@ -192,20 +199,22 @@ function CatchForm({
     };
   }, [presetLake]);
 
-  // Lake at the catch location (local, works offline). Pre-fills the waterbody name and boosts
-  // species recorded in that lake in the suggestions.
+  // Lake at the catch location: an instant offline guess from lake boxes, then (with signal) the server's exact
+  // answer from lake outlines. Boosts that lake's species in the suggestions. The server re-checks on upload.
   useEffect(() => {
     if (!coords || lakeId) return;
     let cancelled = false;
-    detectWaterbody(coords.lat, coords.lng)
-      .then(async (w) => {
-        if (cancelled || !w) return;
-        setLake(w);
-        setWaterbody((cur) => cur || w.name || '');
-        setLakeSpecies(await speciesInWaterbody(w.id));
-        if (w.region) setRegions((r) => (r.length ? r : [w.region]));
-      })
-      .catch(() => {});
+    const use = async (w: Waterbody | null) => {
+      if (cancelled) return;
+      setLake(w);
+      setLakeSpecies(w ? await speciesInWaterbody(w.id) : new Set());
+      if (w?.region) setRegions((r) => (r.length ? r : [w.region]));
+    };
+    (async () => {
+      await use(await detectWaterbody(coords.lat, coords.lng));
+      const exact = await waterbodyAtOnline(coords.lat, coords.lng);
+      if (exact !== undefined) await use(exact);
+    })().catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -526,18 +535,22 @@ function CatchForm({
 
         {/* Where + conditions */}
         <View style={{ gap: space.sm }}>
-          <Field label="Lake or spot" placeholder="e.g. Lac Le Jeune, north bay" value={waterbody} onChangeText={setWaterbody} />
+          <Field label="Spot (optional)" placeholder="e.g. north bay, by the dock" value={waterbody} onChangeText={setWaterbody} />
           <Group>
             <Row
-              label="Location"
-              value={
-                presetLake
-                  ? (presetLake.name ?? 'Selected lake')
-                  : locating
+              label="Lake"
+              value={lake ? (lake.name ?? 'Unnamed lake') : locating ? 'Finding…' : coords ? 'None nearby' : 'Needs location'}
+            />
+            {presetLake ? null : (
+              <Row
+                label="Location"
+                value={
+                  locating
                     ? 'Finding…'
                     : (placeName ?? (coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : 'Not available'))
-              }
-            />
+                }
+              />
+            )}
             {weather ? (
               <Row
                 label="Weather"

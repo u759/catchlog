@@ -40,8 +40,9 @@ export default function SpeciesScreen() {
 
   const { data: mine } = useLiveQuery<{ id: string; caught_at: string; length_mm: number | null; weight_g: number | null;
     photo_path: string | null; waterbody: string | null }>(
-    `SELECT id, caught_at, length_mm, weight_g, photo_path, waterbody FROM catches
-     WHERE user_id = ? AND species_id = ? AND deleted_at IS NULL ORDER BY julianday(caught_at) DESC`,
+    `SELECT c.id, c.caught_at, c.length_mm, c.weight_g, c.photo_path, coalesce(w.name, c.waterbody, c.place_name) AS waterbody
+     FROM catches c LEFT JOIN waterbodies w ON w.id = c.waterbody_id
+     WHERE c.user_id = ? AND c.species_id = ? AND c.deleted_at IS NULL ORDER BY julianday(c.caught_at) DESC`,
     [userId, id ?? ''],
     ['catches'],
   );

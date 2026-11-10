@@ -16,7 +16,10 @@ export type CatchView = {
   lat: number | null;
   lng: number | null;
   place_name: string | null;
+  /** What was typed in "Spot" (older catches: the lake name). */
   waterbody: string | null;
+  /** Name of the linked lake (waterbody_id, set by the server from the catch's position). */
+  lake_name: string | null;
   lure: string | null;
   line_lb: number | null;
   notes: string | null;
@@ -42,6 +45,10 @@ export const photoIdFromPath = (path: string) => path.split('/').pop()!.replace(
 
 /** Timestamps synced from Postgres use a space ("2026-11-10 03:18:27Z"); Hermes only parses ISO "T". */
 export const parseTs = (s: string) => new Date(s.includes('T') ? s : s.replace(' ', 'T'));
+
+/** Where a catch was, for one-line lists: the linked lake, else the typed spot, else the place name. */
+export const placeLabel = (c: Pick<CatchView, 'lake_name' | 'waterbody' | 'place_name'>) =>
+  c.lake_name ?? c.waterbody ?? c.place_name;
 
 export const speciesLabel = (c: Pick<CatchView, 'species' | 'species_other'>) =>
   c.species?.common_name ?? c.species_other ?? 'Unknown species';
@@ -83,6 +90,7 @@ export function fromLocal(r: LocalCatchRow): CatchView {
     lng: (r.lng as number) ?? null,
     place_name: (r.place_name as string) ?? null,
     waterbody: (r.waterbody as string) ?? null,
+    lake_name: (r.lake_name as string) ?? null,
     lure: (r.lure as string) ?? null,
     line_lb: (r.line_lb as number) ?? null,
     notes: (r.notes as string) ?? null,
@@ -98,5 +106,5 @@ export function fromLocal(r: LocalCatchRow): CatchView {
 
 /** SELECT list used by every local catch query. */
 export const LOCAL_CATCH_SELECT = `
-  SELECT c.*, s.common_name AS sp_name, s.common_name_fr AS sp_name_fr, s.scientific_name AS sp_sci
-  FROM catches c LEFT JOIN species s ON s.id = c.species_id`;
+  SELECT c.*, s.common_name AS sp_name, s.common_name_fr AS sp_name_fr, s.scientific_name AS sp_sci, w.name AS lake_name
+  FROM catches c LEFT JOIN species s ON s.id = c.species_id LEFT JOIN waterbodies w ON w.id = c.waterbody_id`;

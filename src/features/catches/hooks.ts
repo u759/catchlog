@@ -27,7 +27,7 @@ const startOfToday = () => {
  * A catch matches if its species is a fuzzy match for the whole query (the shared `matchSpecies`: typos, French
  * and scientific names), or every word appears in the typed species, lake, place, lure or notes.
  */
-const TEXT_FIELDS = ['s.common_name', 'c.species_other', 'c.waterbody', 'c.place_name', 'c.lure', 'c.notes'];
+const TEXT_FIELDS = ['s.common_name', 'c.species_other', 'w.name', 'c.waterbody', 'c.place_name', 'c.lure', 'c.notes'];
 function searchWhere(search: string, speciesIds: string[]): [string, string[]] {
   const words = search.trim().split(/\s+/).filter(Boolean).slice(0, 5);
   const like = (w: string) => `%${w.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
@@ -127,7 +127,7 @@ export const refreshSync = () => syncNow();
 
 // ── writes (local first; src/lib/sync uploads when online) ──────────────────────
 
-export type CatchInput = Omit<CatchView, 'id' | 'user_id' | 'species' | 'photo_path' | 'photo_url' | 'photos' | 'conditions'>;
+export type CatchInput = Omit<CatchView, 'id' | 'user_id' | 'species' | 'photo_path' | 'photo_url' | 'photos' | 'conditions' | 'lake_name'>;
 
 /** A photo in the catch form: an existing one (`path`) or a newly picked one (`uri`, already compressed with
  * compressPhoto so "Identify" and the upload send the same bytes). `id` is set at pick time. */

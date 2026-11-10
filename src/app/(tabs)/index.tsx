@@ -15,7 +15,7 @@ import {
   useLogbookStats,
   usePendingUploads,
 } from '@/features/catches/hooks';
-import { type CatchView, parseTs, speciesLabel } from '@/features/catches/model';
+import { type CatchView, parseTs, placeLabel, speciesLabel } from '@/features/catches/model';
 import { useUnits } from '@/features/profile/hooks';
 import { colors, radius, space, type } from '@/theme';
 import { formatLength, formatWeight, lengthUnit, type Units, weightUnit } from '@/utils/units';
@@ -223,7 +223,7 @@ function BestCatch({ c, units }: { c: CatchView; units: Units }) {
             </Text>
             <Badge label="Personal best" style={{ alignSelf: 'center', flexShrink: 0 }} />
           </View>
-          <Facts items={[...measures(c, units), c.waterbody ?? c.place_name, whenLabel(c.caught_at)]} />
+          <Facts items={[...measures(c, units), placeLabel(c), whenLabel(c.caught_at)]} />
         </View>
       </Card>
     </Pressable>
@@ -247,7 +247,7 @@ function CatchRow({ c, units, first, last }: { c: CatchView; units: Units; first
           {speciesLabel(c)}
         </Text>
         <Text style={type.secondary} numberOfLines={1}>
-          {[c.waterbody ?? c.place_name, whenLabel(c.caught_at)].filter(Boolean).join('  ·  ')}
+          {[placeLabel(c), whenLabel(c.caught_at)].filter(Boolean).join('  ·  ')}
         </Text>
       </View>
       <Text style={[type.body, styles.rowMeasure]}>

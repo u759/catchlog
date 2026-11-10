@@ -4,6 +4,7 @@ import type { Tables } from '@/lib/database.types';
 import { PHOTO_BUCKET, supabase } from '@/lib/supabase';
 
 import { parseConditions } from '@/features/conditions/model';
+import { db } from '@/lib/sync/db';
 
 import type { CatchView } from './model';
 
@@ -35,6 +36,10 @@ export async function fetchRemoteCatch(id: string): Promise<CatchView | null> {
   return {
     ...row,
     photos,
+    // Lakes are reference data on the phone, so the linked lake's name comes from there.
+    lake_name: row.waterbody_id
+      ? ((await db.getFirstAsync<{ name: string | null }>('SELECT name FROM waterbodies WHERE id = ?', [row.waterbody_id]))?.name ?? null)
+      : null,
     weather: (data.weather as CatchView['weather']) ?? null,
     conditions: parseConditions(data.conditions),
     visibility: data.visibility as CatchView['visibility'],

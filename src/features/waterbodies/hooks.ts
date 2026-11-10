@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing';
 
 import { useUserId } from '@/features/catches/hooks';
 import { db, useLiveQuery } from '@/lib/sync/db';
+import { supabase } from '@/lib/supabase';
 
 export type DepthMap = { title: string; url: string; source: string; licence: string };
 export type Waterbody = {
@@ -41,6 +42,25 @@ export function useWaterbody(id: string | null | undefined) {
   const { data } = useLiveQuery<Record<string, unknown>>('SELECT * FROM waterbodies WHERE id = ?', [id ?? ''], ['waterbodies']);
   const row = data[0];
   return useMemo(() => (row ? toWaterbody(row) : null), [row]);
+}
+
+/** A lake from the phone's copy of the reference data (null if not synced yet). */
+export async function getWaterbody(id: string): Promise<Waterbody | null> {
+  const row = await db.getFirstAsync<Record<string, unknown>>('SELECT * FROM waterbodies WHERE id = ?', [id]);
+  return row ? toWaterbody(row) : null;
+}
+
+/**
+ * The lake at a point by the server's exact rule (nearest outline within 300 m), when there's signal. Returns
+ * undefined if the server can't be asked (offline, slow), so the caller keeps its offline guess.
+ */
+export async function waterbodyAtOnline(lat: number, lng: number): Promise<Waterbody | null | undefined> {
+  const timeout = new Promise<undefined>((r) => setTimeout(() => r(undefined), 5000));
+  const ask = supabase.rpc('waterbody_at', { p_lat: lat, p_lng: lng }).then(({ data, error }) =>
+    // A lake the phone hasn't synced yet: keep the guess rather than claim "no lake".
+    error ? undefined : data ? getWaterbody(data).then((w) => w ?? undefined) : null,
+  );
+  return Promise.race([ask, timeout]).catch(() => undefined);
 }
 
 /** Species recorded in a waterbody, plus whether you've caught each. */

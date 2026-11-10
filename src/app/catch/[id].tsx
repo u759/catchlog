@@ -95,15 +95,16 @@ export default function CatchDetails() {
           />
         </View>
 
-        {(c.waterbody || c.place_name) && (
+        {(c.lake_name || c.waterbody || c.place_name) && (
           <Group>
-            {c.waterbody ? (
+            {c.lake_name && c.waterbody_id ? (
               <Row
-                label={c.waterbody}
+                label={c.lake_name}
                 sub="Lake"
-                onPress={c.waterbody_id ? () => router.push({ pathname: '/lake/[id]', params: { id: c.waterbody_id! } }) : undefined}
+                onPress={() => router.push({ pathname: '/lake/[id]', params: { id: c.waterbody_id! } })}
               />
             ) : null}
+            {c.waterbody && c.waterbody !== c.lake_name ? <Row label={c.waterbody} sub={c.lake_name ? 'Spot' : 'Lake or spot'} /> : null}
             {c.place_name ? <Row label={c.place_name} sub="Place" /> : null}
           </Group>
         )}
