@@ -25,6 +25,7 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     ...config,
     name: "CatchLog",
     slug: "catchlog",
+    owner: "dreamify001", // Expo account that owns the EAS project
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -87,7 +88,7 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
       "./plugins/withReleaseSigning",
     ],
     extra: {
-      eas: { projectId: "d4de49d0-f6d3-4bf9-926a-72f8aee72f25" },
+      eas: { projectId: "245d0f07-a89b-4fdb-aa1d-9223647761c8" },
     },
     experiments: {
       typedRoutes: true,
