@@ -79,10 +79,10 @@ Check here first; extend these instead of adding parallel versions.
 - `collection/`: `useDex`, `useSpecies`, `useSpeciesLakes`, `useLakeRegions`, `useNearbySpecies` (`NEAR_KM`); `fishbaseLabels.ts` (plain words for FishBase terms).
 - `waterbodies/`: `useWaterbody`, `useWaterbodySpecies`, `detectWaterbody` (offline lake guess), `speciesInWaterbody`, `openDepthMap`.
 - `map/offline.ts`: map style URLs (OpenFreeMap, satellite), offline-area limits and tile maths, `offlineBytes`.
-- `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts`, `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
+- `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts` (`fetchCurrentWeather`, `fetchWeatherAt` for a past hour), `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
 - `src/utils/units.ts`: length, weight, depth, lure weight, distance formatting/parsing.
 
-**Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue), `images.ts` (species photo prefetch for offline).
+**Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue), `images.ts` (species photo prefetch for offline), `backfill.ts` (weather/place for catches logged offline, by catch time).
 
 **Server (`supabase/`):**
 - `sync-sources` Edge Function adapters: `bc.ts` (lakes, depths, depth maps, fish codes, fish observations), `fishbase.ts`, `wiki.ts`, `mapstyles.ts` (satellite style). Status/credits rows in `public.data_sources`.

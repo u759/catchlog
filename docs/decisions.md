@@ -56,6 +56,9 @@ Edge Function calls Fishial Recognition API v2 (free plan: 100 credits/month, 1 
 1. **Region-scoped lake sync**, like offline map areas: the phone downloads `waterbodies` / `waterbody_species` only for its home province (from location) plus regions the user adds in a "Regions" setting. Filter the pulls by `waterbodies.region`; species and profiles stay all-Canada. `reference_version` becomes per region.
 2. **Keep only useful lakes on the server:** named lakes plus lakes with depth or fish data (BC: 4,884 of 16,457 have data), and simplify outlines further. Keeps the database inside the free tier.
 
+## Conditions are for the catch's time, not the upload's (2026-11-10)
+Weather is Open-Meteo for the hour of `caught_at` at the catch's coordinates: live weather is kept only when the catch is within the last hour; otherwise (or when an edit moves time/place) it's saved empty and `src/lib/sync/backfill.ts` fills weather and place name on the next online sync (forecast API for ~3 months back, archive API before; max 3 tries per catch). Moon/sun/solunar are computed from `caught_at` on display. Tides and water temperature (V2) must follow the same rule.
+
 ## Map: MapLibre + OpenFreeMap (2026-11-10)
 `@maplibre/maplibre-react-native` v11 with OpenFreeMap's Liberty style. Catch pins clustered from local SQLite; saved spots are a synced, private table.
 **Saved areas:** "Save area" shows a square frame the user positions; it's sized so every area includes street-level detail (zoom 14) within OpenFreeMap's 3,000-tile cap (~70 × 70 km max). Each area is two packs sharing `metadata.group`: map (zoom 8–16) and satellite (zoom 8–14). Total offline maps capped at 300 MB. Limits live in `src/features/map/offline.ts`; Saved areas screen lists/deletes them.

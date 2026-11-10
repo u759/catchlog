@@ -30,6 +30,35 @@ export async function fetchCurrentWeather(lat: number, lng: number): Promise<Wea
   }
 }
 
+/**
+ * Weather for a past moment (the catch's time, not "now"): Open-Meteo hourly data, the forecast API for the last
+ * ~3 months and the historical archive before that. Returns the hour that contains `at`.
+ */
+export async function fetchWeatherAt(lat: number, lng: number, at: Date): Promise<Weather | null> {
+  const day = at.toISOString().slice(0, 10);
+  const recent = Date.now() - at.getTime() < 85 * 86_400_000;
+  const host = recent ? 'https://api.open-meteo.com/v1/forecast' : 'https://archive-api.open-meteo.com/v1/archive';
+  const url =
+    `${host}?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&start_date=${day}&end_date=${day}&timezone=GMT` +
+    '&hourly=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&wind_speed_unit=kmh';
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const h = (await res.json())?.hourly;
+    const i = (h?.time as string[] | undefined)?.indexOf(`${day}T${String(at.getUTCHours()).padStart(2, '0')}:00`) ?? -1;
+    if (i < 0 || h.temperature_2m[i] == null) return null;
+    return {
+      temp_c: h.temperature_2m[i],
+      wind_kph: h.wind_speed_10m[i],
+      wind_dir_deg: h.wind_direction_10m[i],
+      pressure_hpa: h.surface_pressure[i],
+      weather_code: h.weather_code[i],
+    };
+  } catch {
+    return null;
+  }
+}
+
 // WMO weather interpretation codes -> short label
 const WMO: Record<number, string> = {
   0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast',

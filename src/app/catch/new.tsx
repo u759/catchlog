@@ -52,6 +52,23 @@ import {
 type Picked = { uri: string; width: number; height: number };
 type Visibility = 'private' | 'friends' | 'public';
 
+/**
+ * Weather to save with a catch. Live weather only describes catches within the last hour; for anything else (or an
+ * edit that moved the time/place) save nothing and the sync fills it in for the catch's own time.
+ */
+function weatherForSave(
+  weather: Weather | null,
+  caughtAt: Date,
+  coords: { lat: number; lng: number } | null,
+  existing?: CatchView | null,
+) {
+  if (existing) {
+    const moved = parseTs(existing.caught_at).getTime() !== caughtAt.getTime() || existing.lat !== coords?.lat || existing.lng !== coords?.lng;
+    return moved ? null : weather;
+  }
+  return Math.abs(Date.now() - caughtAt.getTime()) <= 60 * 60_000 ? weather : null;
+}
+
 /** /catch/new = log a catch; /catch/new?id=… = edit that catch; /catch/new?lake=… = log a catch at that lake. */
 export default function CatchFormScreen() {
   const { id, lake: lakeId } = useLocalSearchParams<{ id?: string; lake?: string }>();
@@ -249,7 +266,9 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
           lng: coords?.lng ?? null,
           place_name: placeName,
           waterbody: waterbody.trim() || null,
-          weather,
+          // Weather must describe the catch's time. "Now" weather only counts if the catch was within the hour;
+          // otherwise (or when an edit moved the time/place) leave it empty and the sync fills it in for caughtAt.
+          weather: weatherForSave(weather, caughtAt, coords, existing),
           lure: lure.trim() || null,
           gear_id: gearId,
           waterbody_id: lake?.id ?? null, // offline guess; the server sets the real one

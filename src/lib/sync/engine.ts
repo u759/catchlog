@@ -6,6 +6,7 @@ import type { SQLiteBindValue } from 'expo-sqlite';
 import { supabase } from '@/lib/supabase';
 
 import { db, getState, initDb, setState, transaction, type Tx, wipeLocalData, write } from './db';
+import { backfillCatchDetails } from './backfill';
 import { prefetchSpeciesImages } from './images';
 import { deleteAllLocalPhotos, deleteLocalPhoto, localPhotoFile, processPhotoQueue, queuePhoto } from './photos';
 
@@ -412,6 +413,8 @@ async function runOnce() {
     await pullFriendships(userId);
     for (const t of REFERENCE) await pullReference(t);
     await prefetchSpeciesImages();
+    // Weather/place for catches logged without signal, from each catch's own time and position.
+    await backfillCatchDetails(userId).catch(() => {});
     // Drain due photo transfers (failed ones back off and wait for a later run).
     for (let i = 0; i < 20 && status.online; i++) {
       if ((await processPhotoQueue()) === 0) break;

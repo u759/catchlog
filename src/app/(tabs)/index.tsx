@@ -164,10 +164,13 @@ function BestCatch({ c, units }: { c: CatchView; units: Units }) {
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <CatchPhoto photoPath={c.photo_path} style={styles.bestPhoto} iconSize={40} />
         <View style={{ padding: space.lg, gap: space.xs }}>
-          <Badge label="Personal best" />
-          <Text style={type.title} numberOfLines={2}>
-            {speciesLabel(c)}
-          </Text>
+          <View style={styles.bestTitleRow}>
+            {/* The name wraps (never truncates) at large text sizes; the badge keeps its width. */}
+            <Text style={[type.title, { flex: 1 }]} numberOfLines={2}>
+              {speciesLabel(c)}
+            </Text>
+            <Badge label="Personal best" style={{ alignSelf: 'center', flexShrink: 0 }} />
+          </View>
           <Facts items={[...measures(c, units), c.waterbody ?? c.place_name, whenLabel(c.caught_at)]} />
         </View>
       </Card>
@@ -205,6 +208,7 @@ function CatchRow({ c, units, first, last }: { c: CatchView; units: Units; first
 const styles = StyleSheet.create({
   sync: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   bestPhoto: { width: '100%', aspectRatio: 16 / 10 },
+  bestTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
