@@ -24,6 +24,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'light',
   ios: {
     bundleIdentifier: BUNDLE_ID,
+    // Only standard HTTPS: answers App Store Connect's export-compliance question for every build.
+    config: { usesNonExemptEncryption: false },
     icon: './assets/images/icon.png', // made by scripts/make-icons.py
     supportsTablet: false,
   },

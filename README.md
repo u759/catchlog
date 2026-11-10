@@ -65,6 +65,20 @@ The FishBase licence is non-commercial. Selling the app would need permission fr
 
 Secrets: `CRON_SECRET` (function secret + Vault `sync_sources_cron_secret`), `FISHIAL_CLIENT_ID/SECRET`.
 
+## Release (EAS)
+
+Builds run on Expo's servers (EAS Build) and upload with EAS Submit. Profiles are in `eas.json`:
+`production` (store builds, build numbers auto-incremented by EAS), `preview` (Android APK for sideloading),
+`development` (dev client). Android signs with our own upload key from the gitignored `credentials.json`
+(`credentialsSource: "local"`); iOS certificates are managed by EAS. `EXPO_PUBLIC_*` values come from the
+committed `.env` (public values only).
+
+```bash
+npx eas-cli@latest login && npx eas-cli@latest init        # once: links the project (adds extra.eas.projectId)
+npx eas-cli@latest build -p ios --profile production --auto-submit       # → TestFlight
+npx eas-cli@latest build -p android --profile production --auto-submit   # → Play internal testing (draft)
+```
+
 ## Layout
 
 ```
