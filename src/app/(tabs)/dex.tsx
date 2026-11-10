@@ -7,7 +7,6 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import { AppHeader } from '@/components/AppHeader';
 import { Chip, EmptyState } from '@/components/ui';
 import { localPhotoUri } from '@/features/catches/photos';
-import { DEX_GROUPS, groupLabel } from '@/features/collection/groups';
 import { type DexEntry, useDex } from '@/features/collection/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { colors, radius, shadow, space, type } from '@/theme';
@@ -41,16 +40,18 @@ export default function Dex() {
     [entries, scope],
   );
   const caughtCount = inScope.filter((e) => e.caught > 0).length;
+  // Groups are FishBase families (by their common name), most species first.
   const groupsPresent = useMemo(() => {
-    const keys = new Set(inScope.map((e) => e.group));
-    return [...DEX_GROUPS.map((g) => g.key), 'other'].filter((k) => keys.has(k));
+    const counts = new Map<string, number>();
+    for (const e of inScope) if (e.family_common) counts.set(e.family_common, (counts.get(e.family_common) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
   }, [inScope]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return inScope.filter(
       (e) =>
-        (!group || e.group === group) &&
+        (!group || e.family_common === group) &&
         (!q || (e.caught > 0 && e.common_name.toLowerCase().includes(q)) || String(e.dex_no) === q ||
           (e.caught === 0 && q.length > 3 && e.common_name.toLowerCase().includes(q))),
     );
@@ -97,7 +98,7 @@ export default function Dex() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
               <Chip label="All groups" selected={!group} onPress={() => setGroup(null)} />
               {groupsPresent.map((g) => (
-                <Chip key={g} label={groupLabel(g)} selected={group === g} onPress={() => setGroup(g)} />
+                <Chip key={g} label={g} selected={group === g} onPress={() => setGroup(g)} />
               ))}
             </ScrollView>
           </View>
@@ -118,7 +119,7 @@ function DexCard({ entry: e, lengthText, weightText }: { entry: DexEntry; length
   const found = e.caught > 0;
   const photo = (found && localPhotoUri(e.best_photo)) || null;
   const image = photo ?? e.thumb;
-  const hint = e.lakes > 0 ? `Recorded in ${e.lakes} lake${e.lakes > 1 ? 's' : ''}` : e.environment ? `Lives ${e.environment}` : groupLabel(e.group);
+  const hint = e.lakes > 0 ? `Recorded in ${e.lakes} lake${e.lakes > 1 ? 's' : ''}` : e.environment ? `Lives ${e.environment}` : e.family_common;
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/species/[id]', params: { id: e.id } })}

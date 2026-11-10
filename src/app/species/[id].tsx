@@ -11,7 +11,6 @@ import { Card, EmptyState, Section, StatTile } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { parseTs } from '@/features/catches/model';
 import { localPhotoUri } from '@/features/catches/photos';
-import { groupLabel, groupOf } from '@/features/collection/groups';
 import { useSpecies, useSpeciesLakes } from '@/features/collection/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
@@ -94,7 +93,7 @@ export default function SpeciesScreen() {
           <Text style={type.title}>{String(s.common_name)}</Text>
           <Text style={type.muted}>
             <Text style={{ fontStyle: 'italic' }}>{String(s.scientific_name)}</Text>
-            {s.common_name_fr ? ` · ${String(s.common_name_fr)}` : ''} · {groupLabel(groupOf(s.family as string))}
+            {s.common_name_fr ? ` · ${String(s.common_name_fr)}` : ''}{s.family_common ? ` · ${String(s.family_common)}` : ''}
           </Text>
         </View>
 

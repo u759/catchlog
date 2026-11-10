@@ -335,12 +335,12 @@ const nb = (v: unknown) => (v == null ? null : b(v));
 const REFERENCE: RefTable[] = [
   {
     table: 'species',
-    select: 'id, common_name, common_name_fr, scientific_name, family, order_name, dex_no, game_fish, in_canada, regions, lw_a, lw_b, max_length_mm, freshwater, saltwater, updated_at',
+    select: 'id, common_name, common_name_fr, scientific_name, family, family_common, order_name, dex_no, game_fish, in_canada, regions, lw_a, lw_b, max_length_mm, freshwater, saltwater, updated_at',
     order: ['updated_at', 'id'],
     pk: ['id'],
-    columns: ['id', 'common_name', 'common_name_fr', 'scientific_name', 'family', 'order_name', 'dex_no', 'game_fish',
+    columns: ['id', 'common_name', 'common_name_fr', 'scientific_name', 'family', 'family_common', 'order_name', 'dex_no', 'game_fish',
       'in_canada', 'regions', 'lw_a', 'lw_b', 'max_length_mm', 'freshwater', 'saltwater', 'updated_at'],
-    toLocal: (s) => [s.id, s.common_name, s.common_name_fr, s.scientific_name, s.family, s.order_name, s.dex_no,
+    toLocal: (s) => [s.id, s.common_name, s.common_name_fr, s.scientific_name, s.family, s.family_common, s.order_name, s.dex_no,
       b(s.game_fish), b(s.in_canada), JSON.stringify(s.regions ?? []), s.lw_a, s.lw_b, s.max_length_mm,
       nb(s.freshwater), nb(s.saltwater), s.updated_at] as SQLiteBindValue[],
   },

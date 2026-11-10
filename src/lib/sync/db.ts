@@ -109,6 +109,11 @@ const MIGRATIONS: string[] = [
   -- New columns: refetch catches and species in full on the next sync.
   DELETE FROM sync_state WHERE key IN ('cursor:catches', 'cursor:species', 'species:version');
   `,
+  // v3: FishBase family common name (Dex groups).
+  `
+  ALTER TABLE species ADD COLUMN family_common TEXT;
+  DELETE FROM sync_state WHERE key LIKE 'ref:species:%';
+  `,
 ];
 
 let ready: Promise<void> | null = null;

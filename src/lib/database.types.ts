@@ -1,4 +1,3 @@
-// Generated from the Supabase schema: npx supabase gen types typescript --linked > src/lib/database.types.ts
 export type Json =
   | string
   | number
@@ -153,6 +152,7 @@ export type Database = {
           running_since: string | null
           state: Json
           url: string | null
+          version: string | null
         }
         Insert: {
           attribution: string
@@ -170,6 +170,7 @@ export type Database = {
           running_since?: string | null
           state?: Json
           url?: string | null
+          version?: string | null
         }
         Update: {
           attribution?: string
@@ -187,6 +188,7 @@ export type Database = {
           running_since?: string | null
           state?: Json
           url?: string | null
+          version?: string | null
         }
         Relationships: []
       }
@@ -328,6 +330,7 @@ export type Database = {
           common_name_fr: string | null
           dex_no: number | null
           family: string | null
+          family_common: string | null
           fishbase_id: number | null
           freshwater: boolean | null
           game_fish: boolean
@@ -352,6 +355,7 @@ export type Database = {
           common_name_fr?: string | null
           dex_no?: number | null
           family?: string | null
+          family_common?: string | null
           fishbase_id?: number | null
           freshwater?: boolean | null
           game_fish?: boolean
@@ -376,6 +380,7 @@ export type Database = {
           common_name_fr?: string | null
           dex_no?: number | null
           family?: string | null
+          family_common?: string | null
           fishbase_id?: number | null
           freshwater?: boolean | null
           game_fish?: boolean
@@ -739,8 +744,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      patch_species: { Args: { p_rows: Json }; Returns: number }
+      patch_species_profiles: { Args: { p_rows: Json }; Returns: number }
       reference_version: { Args: { p_table: string }; Returns: string }
+      replace_species_aliases: {
+        Args: { p_rows: Json; p_type: string }
+        Returns: number
+      }
       send_friend_request: { Args: { p_code: string }; Returns: Json }
+      set_species_wiki: { Args: { p_rows: Json }; Returns: number }
       set_waterbody_depth_maps: {
         Args: { p_licence: string; p_rows: Json; p_source: string }
         Returns: number

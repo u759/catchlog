@@ -3,15 +3,14 @@ import { useMemo } from 'react';
 import { useUserId } from '@/features/catches/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
 
-import { groupOf } from './groups';
-
 export type DexEntry = {
   id: string;
   dex_no: number;
   common_name: string;
   scientific_name: string;
   family: string | null;
-  group: string;
+  /** FishBase's common name for the family, e.g. 'Salmonids' (Dex groups). */
+  family_common: string | null;
   game_fish: boolean;
   in_canada: boolean;
   regions: string[];
@@ -37,7 +36,7 @@ const parseRegions = (v: unknown) => {
 export function useDex() {
   const userId = useUserId() ?? '';
   const { data, isLoading } = useLiveQuery<Record<string, unknown>>(
-    `SELECT s.id, s.dex_no, s.common_name, s.scientific_name, s.family, s.game_fish, s.in_canada, s.regions,
+    `SELECT s.id, s.dex_no, s.common_name, s.scientific_name, s.family, s.family_common, s.game_fish, s.in_canada, s.regions,
             p.image_thumb_url AS thumb, p.environment,
             coalesce(c.n, 0) AS caught, c.pb_length_mm, c.pb_weight_g,
             (SELECT photo_path FROM catches x WHERE x.user_id = ?1 AND x.species_id = s.id AND x.photo_path IS NOT NULL
@@ -62,7 +61,7 @@ export function useDex() {
           common_name: r.common_name as string,
           scientific_name: r.scientific_name as string,
           family: (r.family as string) ?? null,
-          group: groupOf(r.family as string),
+          family_common: (r.family_common as string) ?? null,
           game_fish: !!r.game_fish,
           in_canada: !!r.in_canada,
           regions: parseRegions(r.regions),

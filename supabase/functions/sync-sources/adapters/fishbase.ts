@@ -7,7 +7,7 @@ import { compressors } from 'npm:hyparquet-compressors@1.1.3';
 import { type Adapter, clean, fetchWithRetry, rpc, speciesWithFishbase } from './types.ts';
 
 /** Bump when the processing below changes, so the next monthly check re-processes the current release. */
-const REV = 2;
+const REV = 3;
 const BASE = 'https://data.source.coop/cboettig/fishbase';
 const PHASES = ['check', 'core', 'names', 'traits', 'spawning-diet', 'synonyms'] as const;
 
@@ -54,13 +54,6 @@ function bySpec(rows: Row[], codes: Set<number>, col = 'SpecCode'): Map<number, 
 }
 
 const titleCase = (s: string) => s.split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
-const FOOD_NAMES: Record<string, string> = {
-  'benth. crust.': 'benthic crustaceans', 'plank. crust.': 'planktonic crustaceans', finfish: 'fish',
-  insects: 'insects', mollusks: 'molluscs', 'other plants': 'plants', worms: 'worms', phytoplankton: 'phytoplankton',
-  zooplankton: 'zooplankton', cephalopods: 'squid & octopus', 'n.a./other benth. invert.': 'other bottom invertebrates',
-  'other plank. invertebrates': 'plankton invertebrates', 'fish (early stages)': 'fish eggs & larvae',
-  detritus: 'detritus', bacteria: 'bacteria',
-};
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SYNONYM_STATUSES = new Set(['accepted name', 'synonym', 'provisionally accepted name']);
 
@@ -89,8 +82,10 @@ export const fishbase: Adapter = {
     for (const s of species) (idsFor.get(s.fishbase_id) ?? idsFor.set(s.fishbase_id, []).get(s.fishbase_id)!).push(s.id);
 
     if (phase === 'core') {
-      const sp = bySpec(await table(release, 'species', ['SpecCode', 'Fresh', 'Brack', 'Saltwater', 'GameFish', 'Comments',
+      const sp = bySpec(await table(release, 'species', ['SpecCode', 'FamCode', 'Fresh', 'Brack', 'Saltwater', 'GameFish', 'Comments',
         'DemersPelag', 'AnaCat', 'DepthRangeShallow', 'DepthRangeDeep', 'Weight', 'LongevityWild']), codes);
+      const families = new Map((await table(release, 'families', ['FamCode', 'CommonName']))
+        .map((r) => [int(r.FamCode), clean(r.CommonName)]));
       const est = bySpec(await table(release, 'estimate', ['SpecCode', 'a', 'b', 'Method_ab', 'MaxLengthTL', 'TempPrefMin',
         'TempPrefMax', 'ComDepthMin', 'ComDepthMax']), codes);
       const speciesRows = species.map((s) => {
@@ -105,6 +100,7 @@ export const fishbase: Adapter = {
           max_length_mm: e?.MaxLengthTL ? round(Number(e.MaxLengthTL) * 10) : null,
           freshwater: f ? flag(f.Fresh) : null, brackish: f ? flag(f.Brack) : null,
           saltwater: f ? flag(f.Saltwater) : null, game_fish: flag(f?.GameFish),
+          family_common: f ? families.get(int(f.FamCode)) ?? null : null,
         };
       });
       const profileRows = species.map((s) => {
@@ -173,7 +169,7 @@ export const fishbase: Adapter = {
 
     if (phase === 'spawning-diet') {
       const spawn = bySpec(await table(release, 'spawning', ['SpecCode', 'C_Code', ...MONTHS]), codes);
-      const food = bySpec(await table(release, 'fooditems', ['SpecCode', 'FoodII']), codes);
+      const food = bySpec(await table(release, 'fooditems', ['SpecCode', 'FoodIII']), codes);
       const rows = species.map((s) => {
         // Spawning months recorded in Canada; other countries' records only when Canada has none.
         const ca = new Set<number>(), other = new Set<number>();
@@ -184,14 +180,14 @@ export const fishbase: Adapter = {
           });
         }
         const months = [...(ca.size ? ca : other)].sort((a, b) => a - b);
-        // Diet: food categories by number of FishBase records, top 5.
+        // Diet: FishBase's food items (as published), top 5 by number of records. 'n.a./other ...' are
+        // FishBase's unassigned buckets and say nothing specific, so they're left out.
         const counts = new Map<string, number>();
-        for (const r of food.get(s.fishbase_id) ?? []) if (r.FoodII) counts.set(String(r.FoodII), (counts.get(String(r.FoodII)) ?? 0) + 1);
-        const diet: string[] = [];
-        for (const [f] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
-          const name = FOOD_NAMES[f] ?? f.replace('n.a./', '').replaceAll('.', '');
-          if (!diet.includes(name) && diet.length < 5) diet.push(name);
+        for (const r of food.get(s.fishbase_id) ?? []) {
+          const item = r.FoodIII == null ? '' : String(r.FoodIII);
+          if (item && !item.startsWith('n.a./')) counts.set(item, (counts.get(item) ?? 0) + 1);
         }
+        const diet = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5).map(([f]) => f);
         return { species_id: s.id, spawning_months: months.length ? months : null, diet: clean(diet.join(', '), 200) };
       });
       return next(await rpc(db, 'patch_species_profiles', { p_rows: rows }));
