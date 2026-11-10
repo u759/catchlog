@@ -1,7 +1,7 @@
 import { loadProjectEnv } from "@expo/env";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-const BUNDLE_ID = "com.catchlog.catchlog";
+const BUNDLE_ID = "com.dreamify.catchlog"; // iOS bundle ID and Android package (Google OAuth clients use it too)
 
 /** Google Sign-In on iOS needs the *reversed* iOS client ID as a URL scheme ("1234-abc.apps.googleusercontent.com"
  * -> "com.googleusercontent.apps.1234-abc"). */

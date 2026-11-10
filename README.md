@@ -26,7 +26,7 @@ Expo Go won't work. Google Sign-In needs a dev build.
 
 `.env` holds public values only (Supabase URL + publishable key, Google client IDs). Never put the Supabase secret key or Google client secret in it.
 
-Google OAuth clients (Google Cloud project "CatchLog"), all for `com.catchlog.catchlog`:
+Google OAuth clients (Google Cloud project "CatchLog"), all for `com.dreamify.catchlog`:
 
 | Client | Notes |
 |---|---|
