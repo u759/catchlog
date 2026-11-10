@@ -4,10 +4,10 @@ import { useMemo } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Button, EmptyState, StatTile } from '@/components/ui';
-import { categoryLabel, GEAR_CATEGORIES } from '@/features/gear/taxonomy';
+import { Button, EmptyState, Facts } from '@/components/ui';
 import { type GearWithStats, useGearList } from '@/features/gear/hooks';
-import { colors, radius, space, type } from '@/theme';
+import { categoryLabel, GEAR_CATEGORIES } from '@/features/gear/taxonomy';
+import { colors, radius, space, touch, type } from '@/theme';
 
 export default function GearTab() {
   const { data: gear } = useGearList();
@@ -24,77 +24,96 @@ export default function GearTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <AppHeader title="Gear" />
+      <AppHeader
+        title="Gear"
+        right={
+          gear.length > 0 ? (
+            <Pressable onPress={() => router.push('/gear/edit')} accessibilityRole="button" accessibilityLabel="Add gear"
+              style={styles.addButton}>
+              <Plus size={22} color={colors.onPrimary} />
+            </Pressable>
+          ) : null
+        }
+      />
       <SectionList
         sections={sections}
         keyExtractor={(g) => g.id}
         stickySectionHeadersEnabled={false}
-        contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl, gap: space.sm }}
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xxl }}
         ListHeaderComponent={
           gear.length > 0 ? (
-            <View style={{ gap: space.md, marginBottom: space.md }}>
-              <View style={styles.stats}>
-                <StatTile label="Items" value={String(totalItems)} />
-                <StatTile label="Fish on gear" value={String(fishOnGear)} />
-              </View>
-              {top && <Text style={type.muted}>Most productive: {top.name} ({top.catches} fish)</Text>}
-            </View>
+            <Facts
+              style={{ marginBottom: space.sm }}
+              items={[
+                `${totalItems} item${totalItems === 1 ? '' : 's'}`,
+                fishOnGear > 0 && `${fishOnGear} fish caught on them`,
+                top && `best: ${top.name}`,
+              ]}
+            />
           ) : undefined
         }
-        renderSectionHeader={({ section }) => <Text style={styles.sectionTitle}>{section.title}</Text>}
-        renderItem={({ item }) => <GearRow g={item} />}
-        ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+        renderSectionHeader={({ section }) => (
+          <Text style={[type.headline, styles.sectionTitle]} accessibilityRole="header">
+            {section.title}
+          </Text>
+        )}
+        renderItem={({ item, index, section }) => (
+          <GearRow g={item} first={index === 0} last={index === section.data.length - 1} />
+        )}
         ListEmptyComponent={
           <EmptyState
             icon={Package}
             title="Your tackle box is empty"
-            body="Add the lures and gear you fish with. Pick them when you log a catch to see what actually works."
+            body="Add the lures and gear you fish with, then pick them when you log a catch to see what actually works."
+            action={<Button label="Add gear" icon={Plus} onPress={() => router.push('/gear/edit')} style={{ alignSelf: 'stretch' }} />}
           />
-        }
-        ListFooterComponent={
-          <Button label="Add gear" icon={Plus} onPress={() => router.push('/gear/edit')} style={{ marginTop: space.xl }} />
         }
       />
     </View>
   );
 }
 
-function GearRow({ g }: { g: GearWithStats }) {
+function GearRow({ g, first, last }: { g: GearWithStats; first: boolean; last: boolean }) {
   const detail = [g.subtype, g.brand, g.color, g.size].filter(Boolean).join(' · ');
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.row,
+        first && { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+        last && { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+        !first && styles.divider,
+        pressed && { opacity: 0.7 },
+      ]}
       onPress={() => router.push({ pathname: '/gear/edit', params: { id: g.id } })}>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text style={type.headline} numberOfLines={1}>
           {g.name}
+          {g.quantity != null && g.quantity > 1 ? <Text style={type.secondary}>  ×{g.quantity}</Text> : null}
         </Text>
-        <Text style={type.muted} numberOfLines={1}>
+        <Text style={type.secondary} numberOfLines={1}>
           {detail || categoryLabel(g.category)}
         </Text>
         {g.species ? (
-          <Text style={styles.species} numberOfLines={1}>
-            {g.species.split(',').slice(0, 3).join(', ')}
+          <Text style={type.secondary} numberOfLines={1}>
+            Caught: {g.species.split(',').slice(0, 3).join(', ')}
           </Text>
         ) : null}
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.count}>{g.catches}</Text>
-        <Text style={type.muted}>fish</Text>
-        {g.quantity != null && <Text style={type.muted}>×{g.quantity}</Text>}
-      </View>
+      <Text style={[type.body, styles.count]}>{g.catches > 0 ? `${g.catches} fish` : ''}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  stats: { flexDirection: 'row', gap: space.sm },
-  sectionTitle: { ...type.label, marginTop: space.md, marginBottom: space.xs },
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: space.md, backgroundColor: colors.surface, borderRadius: radius.md,
-    padding: space.md,
+  sectionTitle: { marginTop: space.xl, marginBottom: space.sm },
+  addButton: {
+    width: touch, height: touch, borderRadius: touch / 2, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
   },
-  name: { fontSize: 16, fontWeight: '700', color: colors.text },
-  species: { fontSize: 12, color: colors.onAccent, fontWeight: '600' },
-  count: { fontSize: 20, fontWeight: '800', color: colors.text },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: space.md, backgroundColor: colors.surface, paddingHorizontal: space.lg,
+    paddingVertical: space.md, minHeight: 56,
+  },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  count: { fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

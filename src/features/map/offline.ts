@@ -1,6 +1,21 @@
 import { OfflineManager } from '@maplibre/maplibre-react-native';
 
-// Limits for map areas saved offline (MapLibre offline packs).
+/** Normal map: OpenFreeMap Liberty (vector). */
+export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+/**
+ * Satellite: EOX Sentinel-2 cloudless 2025 under the Liberty labels. Published by the sync-sources adapter
+ * 'eox-s2cloudless' to a public Storage bucket (offline downloads need an HTTPS style URL).
+ */
+export const SATELLITE_STYLE_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/public/map-styles/satellite.json`;
+/** Sentinel-2 is 10 m per pixel: zoom 14 is its real detail, so satellite downloads stop there. */
+export const SATELLITE_MAX_ZOOM = 14;
+/** Satellite view stops one level past its real detail; closer than that is only blur. */
+export const SATELLITE_VIEW_MAX_ZOOM = SATELLITE_MAX_ZOOM + 1;
+/** Normal map's max zoom. Always pass a number: on the new architecture an undefined maxZoom reaches native as 0. */
+export const MAP_VIEW_MAX_ZOOM = 22;
+
+// Limits for map areas saved offline (MapLibre offline packs). Each saved area is two packs (map + satellite)
+// sharing metadata.group.
 /** OpenFreeMap terms: at most 3,000 tiles per download (https://openfreemap.org/tos/). */
 export const MAX_PACK_TILES = 3000;
 /** Every saved area must include street-level detail; with the tile cap this keeps one area to ~70 × 70 km. */

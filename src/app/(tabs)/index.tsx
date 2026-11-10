@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
-import { ChevronRight, CirclePlus, CloudOff, CloudUpload, Fish, History, MapPin, Star } from 'lucide-react-native';
+import { CloudOff, CloudUpload, Fish } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
-import { Button, Card, Chip, EmptyState, StatTile } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Facts, Segmented } from '@/components/ui';
 import {
   type LogbookFilter,
   refreshSync,
@@ -21,6 +21,12 @@ import { formatLength, formatWeight, lengthUnit, type Units, weightUnit } from '
 
 const PAGE = 30;
 
+const FILTERS: { value: LogbookFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'today', label: 'Today' },
+  { value: 'trophies', label: 'Best 10' },
+];
+
 function whenLabel(iso: string) {
   const d = parseTs(iso);
   const today = new Date();
@@ -30,6 +36,11 @@ function whenLabel(iso: string) {
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
+
+const measures = (c: CatchView, units: Units) => [
+  c.weight_g != null && `${formatWeight(c.weight_g, units)} ${weightUnit(units)}`,
+  c.length_mm != null && `${formatLength(c.length_mm, units)} ${lengthUnit(units)}`,
+];
 
 export default function Logbook() {
   const units = useUnits();
@@ -48,40 +59,35 @@ export default function Logbook() {
 
   const header = (
     <View style={{ gap: space.lg }}>
+      {stats.total > 0 && (
+        <Facts
+          items={[
+            `${stats.total} fish logged`,
+            stats.weight ? `${formatWeight(stats.weight, units)} ${weightUnit(units)} total` : null,
+            stats.today > 0 && `${stats.today} today`,
+          ]}
+        />
+      )}
+
       {sync.count > 0 && (
-        <View style={styles.syncBanner}>
-          {sync.connected ? (
-            <CloudUpload size={16} color={colors.onAccent} />
-          ) : (
-            <CloudOff size={16} color={colors.onAccent} />
-          )}
-          <Text style={styles.syncText}>
+        <View style={styles.sync} accessibilityLiveRegion="polite">
+          {sync.connected ? <CloudUpload size={18} color={colors.primary} /> : <CloudOff size={18} color={colors.primary} />}
+          <Text style={[type.secondary, { flex: 1, color: colors.text }]}>
             {sync.connected
-              ? `Syncing ${sync.count} change${sync.count > 1 ? 's' : ''}…`
-              : `${sync.count} change${sync.count > 1 ? 's' : ''} saved offline. Will sync when you’re back online.`}
+              ? `Uploading ${sync.count} change${sync.count > 1 ? 's' : ''}…`
+              : `${sync.count} change${sync.count > 1 ? 's' : ''} saved on this phone. They upload when you have signal.`}
           </Text>
         </View>
       )}
 
-      <View style={styles.statsRow}>
-        <StatTile label="Total caught" value={String(stats.total)} unit="fish" />
-        <StatTile label="Today" value={`+${stats.today}`} unit="fresh" />
-        <StatTile label="Total weight" value={formatWeight(stats.weight ?? 0, units)} unit={weightUnit(units)} />
-      </View>
+      {stats.total > 0 && <Segmented options={FILTERS} value={filter} onChange={changeFilter} />}
 
-      <View style={styles.chips}>
-        <Chip label="All Species" selected={filter === 'all'} onPress={() => changeFilter('all')} />
-        <Chip label="Today" selected={filter === 'today'} onPress={() => changeFilter('today')} />
-        <Chip label="★ Trophies" selected={filter === 'trophies'} onPress={() => changeFilter('trophies')} />
-      </View>
-
-      {best && filter === 'all' && <FeaturedCatch c={best} units={units} />}
+      {best && filter === 'all' && <BestCatch c={best} units={units} />}
 
       {catches.length > 0 && (
-        <View style={styles.sectionTitle}>
-          <History size={18} color={colors.primary} />
-          <Text style={type.heading}>{filter === 'trophies' ? 'Top 10 by length' : 'Recent Catches'}</Text>
-        </View>
+        <Text style={type.headline} accessibilityRole="header">
+          {filter === 'trophies' ? 'Longest 10' : filter === 'today' ? 'Today' : 'Recent'}
+        </Text>
       )}
     </View>
   );
@@ -92,10 +98,16 @@ export default function Logbook() {
       <FlatList
         data={catches}
         keyExtractor={(c) => c.id}
-        renderItem={({ item }) => <CatchRow c={item} units={units} />}
+        renderItem={({ item, index }) => (
+          <CatchRow c={item} units={units} first={index === 0} last={index === catches.length - 1} />
+        )}
         ListHeaderComponent={header}
         ListHeaderComponentStyle={{ marginBottom: space.md }}
-        ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+        ItemSeparatorComponent={() => (
+          <View style={styles.separatorWrap}>
+            <View style={styles.separator} />
+          </View>
+        )}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
           if (filter !== 'trophies' && catches.length >= limit) setLimit((l) => l + PAGE);
@@ -104,159 +116,96 @@ export default function Logbook() {
           isLoading || (!sync.hasSynced && sync.connected) ? (
             <View style={{ padding: space.xl, alignItems: 'center', gap: space.sm }}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={type.muted}>Downloading your logbook…</Text>
+              <Text style={type.secondary}>Downloading your logbook…</Text>
             </View>
           ) : !sync.hasSynced && stats.total === 0 ? (
             <EmptyState
               icon={CloudOff}
               title="Waiting for a connection"
-              body="Connect to the internet once to download your logbook. You can still log new catches now. They'll sync later."
+              body="Connect once to download your logbook. You can log new catches now; they upload later."
             />
           ) : stats.total === 0 ? (
             <EmptyState
               icon={Fish}
               title="No catches yet"
-              body="Tap the camera button to log your first fish. It works offline too and syncs when you're back in range."
+              body="Log your first fish with the camera button below. It works without signal and uploads later."
+              action={<Button label="Log a catch" onPress={() => router.push('/catch/new')} style={{ alignSelf: 'stretch' }} />}
             />
           ) : (
-            <Text style={[type.muted, { textAlign: 'center', padding: space.xl }]}>Nothing here yet.</Text>
+            <Text style={[type.secondary, { textAlign: 'center', padding: space.xl }]}>
+              {filter === 'today' ? 'No catches today yet.' : 'Nothing here yet.'}
+            </Text>
           )
         }
-        ListFooterComponent={
-          <Button
-            label="Log New Catch"
-            icon={CirclePlus}
-            onPress={() => router.push('/catch/new')}
-            style={{ marginTop: space.xl }}
-          />
-        }
-        contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xxl }}
         refreshControl={<RefreshControl refreshing={sync.syncing} onRefresh={refreshSync} tintColor={colors.primary} />}
       />
     </View>
   );
 }
 
-function FeaturedCatch({ c, units }: { c: CatchView; units: Units }) {
-  return (
-    <View style={{ gap: space.sm }}>
-      <View style={styles.sectionTitle}>
-        <Star size={18} color={colors.primary} />
-        <Text style={[type.heading, { flex: 1 }]}>Featured Catch</Text>
-        <Text style={type.muted}>{whenLabel(c.caught_at)}</Text>
-      </View>
-      <Card style={{ gap: space.md }}>
-        <View style={{ flexDirection: 'row', gap: space.md }}>
-          <View>
-            <CatchPhoto photoPath={c.photo_path} style={styles.featuredPhoto} />
-            <View style={styles.bestBadge}>
-              <Text style={styles.bestText}>BEST</Text>
-            </View>
-          </View>
-          <View style={{ flex: 1, gap: space.sm }}>
-            <Text style={type.heading} numberOfLines={2}>
-              {speciesLabel(c)}
-            </Text>
-            {(c.place_name || c.waterbody) && (
-              <View style={styles.inline}>
-                <MapPin size={14} color={colors.textMuted} />
-                <Text style={type.muted} numberOfLines={1}>
-                  {[c.waterbody, c.place_name].filter(Boolean).join(' • ')}
-                </Text>
-              </View>
-            )}
-            <View style={styles.inline}>
-              <MiniStat label="Weight" value={formatWeight(c.weight_g, units)} unit={weightUnit(units)} />
-              <MiniStat label="Length" value={formatLength(c.length_mm, units)} unit={lengthUnit(units)} />
-            </View>
-          </View>
-        </View>
-        <Button
-          label="View Details"
-          icon={ChevronRight}
-          onPress={() => router.push({ pathname: '/catch/[id]', params: { id: c.id } })}
-          style={{ height: 44 }}
-        />
-      </Card>
-    </View>
-  );
-}
-
-function MiniStat({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <View style={styles.miniStat}>
-      <Text style={type.muted}>{label}</Text>
-      <Text style={styles.miniValue}>
-        {value}
-        <Text style={type.muted}> {unit}</Text>
-      </Text>
-    </View>
-  );
-}
-
-function CatchRow({ c, units }: { c: CatchView; units: Units }) {
+/** The lead of the Logbook: your longest fish, photo first. */
+function BestCatch({ c, units }: { c: CatchView; units: Units }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Personal best: ${speciesLabel(c)}`}
       onPress={() => router.push({ pathname: '/catch/[id]', params: { id: c.id } })}
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]}>
+      style={({ pressed }) => pressed && { opacity: 0.85 }}>
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <CatchPhoto photoPath={c.photo_path} style={styles.bestPhoto} iconSize={40} />
+        <View style={{ padding: space.lg, gap: space.xs }}>
+          <Badge label="Personal best" />
+          <Text style={type.title} numberOfLines={2}>
+            {speciesLabel(c)}
+          </Text>
+          <Facts items={[...measures(c, units), c.waterbody ?? c.place_name, whenLabel(c.caught_at)]} />
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+function CatchRow({ c, units, first, last }: { c: CatchView; units: Units; first: boolean; last: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push({ pathname: '/catch/[id]', params: { id: c.id } })}
+      style={({ pressed }) => [
+        styles.row,
+        first && { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+        last && { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+        pressed && { opacity: 0.7 },
+      ]}>
       <CatchPhoto photoPath={c.photo_path} style={styles.rowPhoto} iconSize={22} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
+        <Text style={type.headline} numberOfLines={1}>
           {speciesLabel(c)}
         </Text>
-        <Text style={type.muted} numberOfLines={1}>
-          {[c.waterbody ?? c.place_name, whenLabel(c.caught_at)].filter(Boolean).join(' • ')}
+        <Text style={type.secondary} numberOfLines={1}>
+          {[c.waterbody ?? c.place_name, whenLabel(c.caught_at)].filter(Boolean).join('  ·  ')}
         </Text>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.rowWeight}>
-          {formatWeight(c.weight_g, units)}
-          <Text style={type.muted}> {weightUnit(units)}</Text>
-        </Text>
-        <Text style={type.muted}>
-          {formatLength(c.length_mm, units)} {lengthUnit(units)}
-        </Text>
-      </View>
+      <Text style={[type.body, styles.rowMeasure]}>
+        {c.length_mm != null ? `${formatLength(c.length_mm, units)} ${lengthUnit(units)}` : ''}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  statsRow: { flexDirection: 'row', gap: space.sm },
-  chips: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
-  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  syncBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    padding: space.md,
-  },
-  syncText: { color: colors.onAccent, fontWeight: '600', fontSize: 13, flex: 1 },
-  featuredPhoto: { width: 120, height: 120, borderRadius: radius.md },
-  bestBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  bestText: { color: colors.onPrimary, fontSize: 11, fontWeight: '800' },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  miniStat: { flex: 1, backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, padding: space.sm },
-  miniValue: { fontSize: 20, fontWeight: '800', color: colors.text },
+  sync: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  bestPhoto: { width: '100%', aspectRatio: 16 / 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
-  rowPhoto: { width: 56, height: 56, borderRadius: radius.sm },
-  rowTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  rowWeight: { fontSize: 18, fontWeight: '800', color: colors.text },
+  rowPhoto: { width: 52, height: 52, borderRadius: radius.sm },
+  rowMeasure: { fontWeight: '600', fontVariant: ['tabular-nums'] },
+  separatorWrap: { backgroundColor: colors.surface, paddingLeft: space.lg + 52 + space.md },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
 });

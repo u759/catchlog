@@ -5,24 +5,18 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { Image } from 'expo-image';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Button, Chip, EmptyState } from '@/components/ui';
+import { Button, EmptyState, Segmented } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { type LeaderboardPeriod, useLeaderboard } from '@/features/leaderboard/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { colors, radius, space, type } from '@/theme';
 import { formatLength, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
 
-const PERIODS: { key: LeaderboardPeriod; label: string }[] = [
-  { key: 'month', label: 'This Month' },
-  { key: 'year', label: 'This Year' },
-  { key: 'all', label: 'All Time' },
+const PERIODS: { value: LeaderboardPeriod; label: string }[] = [
+  { value: 'month', label: 'This month' },
+  { value: 'year', label: 'This year' },
+  { value: 'all', label: 'All time' },
 ];
-
-const rankColors: Record<number, { bg: string; fg: string }> = {
-  1: { bg: colors.gold, fg: colors.onGold },
-  2: { bg: '#E7E9EC', fg: '#5B6168' },
-  3: { bg: '#F5E1D3', fg: '#9A5A2E' },
-};
 
 export default function Leaderboard() {
   const [period, setPeriod] = useState<LeaderboardPeriod>('year');
@@ -37,7 +31,12 @@ export default function Leaderboard() {
       <FlatList
         data={data}
         keyExtractor={(r) => r.user_id}
-        contentContainerStyle={{ padding: space.lg, gap: space.sm }}
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xxl }}
+        ItemSeparatorComponent={() => (
+          <View style={styles.separatorWrap}>
+            <View style={styles.separator} />
+          </View>
+        )}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.primary} />}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
@@ -45,12 +44,8 @@ export default function Leaderboard() {
         }}
         ListHeaderComponent={
           <View style={{ gap: space.md, marginBottom: space.sm }}>
-            <View style={styles.chips}>
-              {PERIODS.map((p) => (
-                <Chip key={p.key} label={p.label} selected={period === p.key} onPress={() => setPeriod(p.key)} />
-              ))}
-            </View>
-            <Text style={type.muted}>Longest fish per angler — you, your friends, and public catches.</Text>
+            <Segmented options={PERIODS} value={period} onChange={setPeriod} />
+            <Text style={type.secondary}>Each angler’s longest fish, from you, your friends and public catches.</Text>
           </View>
         }
         ListEmptyComponent={
@@ -58,19 +53,23 @@ export default function Leaderboard() {
             icon={Trophy}
             title="No ranked catches yet"
             body="Log a catch with a length, then add friends from your Profile to compete."
-            action={<Button label="Add friends" icon={Users} variant="accent" onPress={() => router.push('/profile')} />}
+            action={<Button label="Add friends" icon={Users} variant="secondary" onPress={() => router.push('/profile')} />}
           />
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const isMe = item.user_id === me;
-          const rc = rankColors[item.rank] ?? { bg: colors.surfaceAlt, fg: colors.textMuted };
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Rank ${item.rank}, ${isMe ? 'you' : (item.display_name ?? 'Angler')}`}
               onPress={() => router.push({ pathname: '/catch/[id]', params: { id: item.catch_id } })}
-              style={[styles.row, isMe && styles.rowMe]}>
-              <View style={[styles.rank, { backgroundColor: isMe ? colors.primary : rc.bg }]}>
-                <Text style={[styles.rankText, { color: isMe ? colors.onPrimary : rc.fg }]}>{item.rank}</Text>
-              </View>
+              style={({ pressed }) => [
+                styles.row,
+                index === 0 && { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+                index === data.length - 1 && { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+                pressed && { opacity: 0.7 },
+              ]}>
+              <Text style={[type.headline, styles.rank]}>{item.rank}</Text>
               {item.photo_url ? (
                 <Image source={{ uri: item.photo_url, cacheKey: item.photo_path }} style={styles.thumb} />
               ) : item.avatar_url ? (
@@ -78,21 +77,22 @@ export default function Leaderboard() {
               ) : (
                 <View style={[styles.thumb, { backgroundColor: colors.surfaceAlt }]} />
               )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {isMe ? 'You' : (item.display_name ?? 'Angler')}
-                </Text>
-                <Text style={type.muted} numberOfLines={1}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                  <Text style={type.headline} numberOfLines={1}>
+                    {isMe ? 'You' : (item.display_name ?? 'Angler')}
+                  </Text>
+                </View>
+                <Text style={type.secondary} numberOfLines={1}>
                   {item.species_name ?? 'Unknown species'}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.length}>
-                  {formatLength(item.length_mm, units)}
-                  <Text style={type.muted}> {lengthUnit(units)}</Text>
+                <Text style={[type.headline, { fontVariant: ['tabular-nums'] }]}>
+                  {formatLength(item.length_mm, units)} {lengthUnit(units)}
                 </Text>
                 {item.weight_g ? (
-                  <Text style={type.muted}>
+                  <Text style={type.secondary}>
                     {formatWeight(item.weight_g, units)} {weightUnit(units)}
                   </Text>
                 ) : null}
@@ -106,19 +106,16 @@ export default function Leaderboard() {
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
-  rowMe: { backgroundColor: '#F1F6E4', borderLeftWidth: 4, borderLeftColor: colors.primary },
-  rank: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  rankText: { fontSize: 16, fontWeight: '800' },
-  thumb: { width: 52, height: 52, borderRadius: radius.sm },
-  name: { fontSize: 16, fontWeight: '700', color: colors.text },
-  length: { fontSize: 20, fontWeight: '800', color: colors.text },
+  rank: { width: 28, textAlign: 'center', color: colors.primary, fontVariant: ['tabular-nums'] },
+  thumb: { width: 48, height: 48, borderRadius: radius.sm },
+  separatorWrap: { backgroundColor: colors.surface, paddingLeft: space.lg + 28 + space.md },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
 });

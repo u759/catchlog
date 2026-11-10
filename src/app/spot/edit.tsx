@@ -1,11 +1,12 @@
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Compass, MapPin, Save, Trash2, X } from 'lucide-react-native';
+import { Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Field, InfoPill } from '@/components/ui';
+import { ModalHeader } from '@/components/AppHeader';
+import { Button, Field, Group, Row } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { deleteSpot, distanceBearing, saveSpot, type Spot, useSpot } from '@/features/spots/hooks';
 import { useUnits } from '@/features/profile/hooks';
@@ -68,43 +69,35 @@ function SpotForm({ existing, point }: { existing: Spot | null; point: { lat: nu
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + space.sm : space.lg }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
-          <X size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[type.heading, { flex: 1, textAlign: 'center' }]}>{existing ? 'Spot' : 'Save Spot'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ModalHeader title={existing ? 'Fishing spot' : 'Save a spot'} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <InfoPill icon={MapPin} label={lake?.name ?? 'Location'} value={`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`} />
-        {nav && (
-          <InfoPill
-            icon={Compass}
-            label="From your last position"
-            value={`${formatDistance(nav.distance, units)} · ${Math.round(nav.bearing)}° ${COMPASS[Math.round(nav.bearing / 45) % 8]}`}
+        <Group>
+          <Row
+            label={lake?.name ?? 'Location'}
+            sub={`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`}
+            onPress={lake ? () => router.push({ pathname: '/lake/[id]', params: { id: lake.id } }) : undefined}
           />
-        )}
-        {lake && (
-          <Pressable onPress={() => router.push({ pathname: '/lake/[id]', params: { id: lake.id } })}>
-            <Text style={styles.link}>View {lake.name ?? 'lake'} details →</Text>
-          </Pressable>
-        )}
+          {nav ? (
+            <Row
+              label="From your last position"
+              value={`${formatDistance(nav.distance, units)} · ${Math.round(nav.bearing)}° ${COMPASS[Math.round(nav.bearing / 45) % 8]}`}
+            />
+          ) : null}
+        </Group>
         <Field label="Name" placeholder="e.g. Weed bed drop-off" value={name} onChangeText={setName} />
         <Field label="Depth" placeholder="6" value={depth} onChangeText={setDepth} keyboardType="decimal-pad" suffix={depthUnit(units)} />
         <Field label="Notes" placeholder="Structure, what worked, when…" value={notes} onChangeText={setNotes} multiline
-          style={{ minHeight: 88, fontSize: 16, color: colors.text, textAlignVertical: 'top', paddingVertical: space.md }} />
-        {existing && <Button label="Delete spot" icon={Trash2} variant="ghost" onPress={onDelete} />}
+          style={{ ...type.body, minHeight: 88, textAlignVertical: 'top', paddingVertical: space.md }} />
+        {existing && <Button label="Delete spot" icon={Trash2} variant="danger" onPress={onDelete} style={{ alignSelf: 'flex-start' }} />}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
-        <Button label="Save" icon={Save} onPress={onSave} />
+        <Button label={existing ? 'Save changes' : 'Save spot'} onPress={onSave} />
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingBottom: space.md },
-  body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
-  link: { color: colors.primary, fontWeight: '600' },
+  body: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
   footer: { paddingHorizontal: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },
 });

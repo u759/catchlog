@@ -14,6 +14,8 @@ export type SpeciesOption = {
   game_fish: boolean;
   in_canada: boolean;
   regions: string[];
+  /** Number of lakes on this phone where it has been recorded (how common it is where you fish). */
+  lakes: number;
   lw_a: number | null;
   lw_b: number | null;
   max_length_mm: number | null;
@@ -47,10 +49,13 @@ function parseRegions(v: unknown): string[] {
 /** All species from local SQLite (≈1.4k small rows), plus a fuzzy index over their names. */
 export function useSpeciesIndex() {
   const { data } = useLiveQuery<Record<string, unknown> & { id: string }>(
-    `SELECT id, common_name, common_name_fr, scientific_name, game_fish, in_canada, regions, lw_a, lw_b, max_length_mm
-     FROM species`,
+    `SELECT s.id, s.common_name, s.common_name_fr, s.scientific_name, s.game_fish, s.in_canada, s.regions, s.lw_a, s.lw_b,
+            s.max_length_mm, coalesce(w.lakes, 0) AS lakes
+     FROM species s
+     LEFT JOIN (SELECT species_id, count(DISTINCT waterbody_id) AS lakes FROM waterbody_species GROUP BY species_id) w
+       ON w.species_id = s.id`,
     [],
-    ['species'],
+    ['species', 'waterbody_species'],
   );
   return useMemo(() => {
     const list: SpeciesOption[] = data.map((r) => ({
@@ -61,6 +66,7 @@ export function useSpeciesIndex() {
       game_fish: !!r.game_fish,
       in_canada: !!r.in_canada,
       regions: parseRegions(r.regions),
+      lakes: (r.lakes as number) ?? 0,
       lw_a: (r.lw_a as number) ?? null,
       lw_b: (r.lw_b as number) ?? null,
       max_length_mm: (r.max_length_mm as number) ?? null,
@@ -90,18 +96,21 @@ export function searchSpecies(
   regions: string[],
   limit = 8,
   inLake: Set<string> = new Set(),
+  /** Your catch count per species: your usual fish come first. */
+  mine: Map<string, number> = new Map(),
 ): SpeciesOption[] {
   const local = (s: SpeciesOption) => regions.some((r) => s.regions.includes(r));
   const q = query.trim();
 
   if (!q) {
-    // Fish recorded in this lake first, then game fish in your province.
+    // Your usual fish first, then fish recorded in this lake, then game fish in your province.
     return index.list
-      .filter((s) => inLake.has(s.id) || (s.game_fish && s.in_canada))
+      .filter((s) => mine.has(s.id) || inLake.has(s.id) || (s.game_fish && s.in_canada))
       .sort((a, b) =>
+        (mine.get(b.id) ?? 0) - (mine.get(a.id) ?? 0) ||
         Number(inLake.has(b.id) && b.game_fish) - Number(inLake.has(a.id) && a.game_fish) ||
         Number(inLake.has(b.id)) - Number(inLake.has(a.id)) ||
-        Number(local(b)) - Number(local(a)) || a.common_name.localeCompare(b.common_name))
+        Number(local(b)) - Number(local(a)) || b.lakes - a.lakes || a.common_name.localeCompare(b.common_name))
       .slice(0, limit);
   }
 
@@ -110,7 +119,7 @@ export function searchSpecies(
     .map(({ item, score = 1 }) => ({
       item,
       // lower is better; small boosts so a common local game fish beats an obscure exact-ish match
-      rank: score - (inLake.has(item.id) ? 0.1 : 0) - (item.game_fish ? 0.08 : 0) - (local(item) ? 0.06 : 0) - (item.in_canada ? 0.02 : 0),
+      rank: score - (mine.has(item.id) ? 0.12 : 0) - (inLake.has(item.id) ? 0.1 : 0) - (item.game_fish ? 0.08 : 0) - (local(item) ? 0.06 : 0) - (item.in_canada ? 0.02 : 0),
     }))
     .sort((a, b) => a.rank - b.rank)
     .slice(0, limit)

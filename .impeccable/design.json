@@ -1,0 +1,178 @@
+{
+ "schemaVersion": 2,
+ "generatedAt": "2026-11-10T18:30:28.233748Z",
+ "title": "Design System: CatchLog",
+ "extensions": {
+  "colorMeta": {
+   "forest": {
+    "role": "primary",
+    "displayName": "Forest",
+    "tonalRamp": [
+     "#0B1712",
+     "#14291F",
+     "#1C3A2E",
+     "#2E5646",
+     "#4A7462",
+     "#7B9D8E",
+     "#B4CABF",
+     "#E3EDE8"
+    ]
+   },
+   "lime": {
+    "role": "secondary",
+    "displayName": "Lime",
+    "tonalRamp": [
+     "#2F4A14",
+     "#4A6B22",
+     "#6D8F3A",
+     "#93B35D",
+     "#B7D383",
+     "#D8E9A8",
+     "#E8F2CC",
+     "#F5FAE8"
+    ]
+   },
+   "paper": {
+    "role": "neutral",
+    "displayName": "Paper"
+   },
+   "ink-muted": {
+    "role": "neutral",
+    "displayName": "Ink, muted"
+   }
+  },
+  "typographyMeta": {
+   "large-title": {
+    "displayName": "Large title",
+    "purpose": "Top-level tab screen name."
+   },
+   "title": {
+    "displayName": "Title",
+    "purpose": "Subject of a detail screen."
+   },
+   "headline": {
+    "displayName": "Headline",
+    "purpose": "Section headings, button labels."
+   },
+   "stat": {
+    "displayName": "Stat",
+    "purpose": "The one number that matters in a row."
+   }
+  },
+  "shadows": [
+   {
+    "name": "map-float",
+    "value": "0 3px 10px rgba(0,0,0,0.12)",
+    "purpose": "Only for controls floating over the map."
+   }
+  ],
+  "motion": []
+ },
+ "components": [
+  {
+   "name": "Primary Button",
+   "kind": "button",
+   "refersTo": "button-primary",
+   "description": "The one main action on a screen.",
+   "html": "<button class=\"ds-btn-primary\">Save catch</button>",
+   "css": ".ds-btn-primary{background:#1C3A2E;color:#fff;height:52px;padding:0 24px;border:0;border-radius:12px;font:600 17px -apple-system,system-ui,Roboto,sans-serif;width:100%}.ds-btn-primary:active{background:#14291F}.ds-btn-primary:focus-visible{outline:3px solid #D8E9A8;outline-offset:2px}"
+  },
+  {
+   "name": "Secondary Button",
+   "kind": "button",
+   "refersTo": "button-secondary",
+   "description": "Second action (Library, Cancel).",
+   "html": "<button class=\"ds-btn-secondary\">Library</button>",
+   "css": ".ds-btn-secondary{background:#EEF1EA;color:#15201A;height:52px;padding:0 24px;border:0;border-radius:12px;font:600 17px -apple-system,system-ui,Roboto,sans-serif}.ds-btn-secondary:focus-visible{outline:3px solid #1C3A2E;outline-offset:2px}"
+  },
+  {
+   "name": "Chip",
+   "kind": "chip",
+   "refersTo": "chip",
+   "description": "Filter or pick; selected fills Forest.",
+   "html": "<button class=\"ds-chip\">Rainbow Trout</button><button class=\"ds-chip ds-chip-on\">All time</button>",
+   "css": ".ds-chip{background:#fff;color:#15201A;height:40px;padding:0 16px;border:1px solid #CDD3C9;border-radius:999px;font:600 15px -apple-system,system-ui,Roboto,sans-serif;margin-right:8px}.ds-chip-on{background:#1C3A2E;border-color:#1C3A2E;color:#fff}"
+  },
+  {
+   "name": "Segmented control",
+   "kind": "custom",
+   "refersTo": "segmented",
+   "description": "2-3 mutually exclusive settings.",
+   "html": "<div class=\"ds-seg\"><span class=\"ds-seg-on\">Metric</span><span>Imperial</span></div>",
+   "css": ".ds-seg{display:inline-flex;background:#EEF1EA;border-radius:12px;padding:3px;font:600 15px -apple-system,system-ui,Roboto,sans-serif}.ds-seg span{padding:8px 16px;border-radius:10px;color:#15201A}.ds-seg .ds-seg-on{background:#fff}"
+  },
+  {
+   "name": "List group",
+   "kind": "card",
+   "refersTo": "list-group",
+   "description": "Grouped rows with hairline dividers.",
+   "html": "<div class=\"ds-group\"><div class=\"ds-row\"><span>Max depth</span><b>28 m</b></div><div class=\"ds-row\"><span>Area</span><b>148 ha</b></div></div>",
+   "css": ".ds-group{background:#fff;border-radius:16px;padding:0 16px;font:400 16px -apple-system,system-ui,Roboto,sans-serif;color:#15201A}.ds-row{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-bottom:1px solid #E3E7E0}.ds-row:last-child{border-bottom:0}.ds-row b{font-weight:600}"
+  },
+  {
+   "name": "Field",
+   "kind": "input",
+   "refersTo": "input",
+   "description": "Caption label above, unit suffix.",
+   "html": "<label class=\"ds-field\"><span>Length</span><input placeholder=\"0.0\"/></label>",
+   "css": ".ds-field{display:flex;flex-direction:column;gap:4px;font:500 13px -apple-system,system-ui,Roboto,sans-serif;color:#5C665F}.ds-field input{height:48px;border:1px solid #CDD3C9;border-radius:12px;padding:0 12px;font:400 16px -apple-system,system-ui,Roboto,sans-serif;color:#15201A}.ds-field input:focus{outline:0;border-color:#1C3A2E}"
+  }
+ ],
+ "narrative": {
+  "northStar": "The Tackle Box",
+  "overview": "Practical and organised: everything has a labelled place, controls are sturdy enough for wet hands, and nothing is there for decoration. Colour comes from the content, not the chrome.",
+  "keyCharacteristics": [
+   "One lead per screen; supporting facts as quiet text and grouped rows, never a grid of equal tiles.",
+   "Flat. No drop shadows except controls floating over the map.",
+   "System font only, seven text roles, three weights (400, 600, 700). Sentence case everywhere.",
+   "Forest is the only interactive colour; lime only marks a personal highlight."
+  ],
+  "rules": [
+   {
+    "name": "The One Tint Rule",
+    "body": "Forest is the only colour that means \"you can press this\" or \"this is selected\".",
+    "section": "colors"
+   },
+   {
+    "name": "The Highlight Rule",
+    "body": "Lime appears only where something is personally notable (new species, PB).",
+    "section": "colors"
+   },
+   {
+    "name": "The Sun Rule",
+    "body": "Body and secondary text stay at or above 4.5:1 against whatever they sit on.",
+    "section": "colors"
+   },
+   {
+    "name": "The Seven Roles Rule",
+    "body": "Every text uses one of the seven roles, through the theme.",
+    "section": "typography"
+   },
+   {
+    "name": "The No-Shouting Rule",
+    "body": "No uppercase labels with letter-spacing.",
+    "section": "typography"
+   },
+   {
+    "name": "The Flat-By-Default Rule",
+    "body": "No shadows on cards, tiles, sections or buttons.",
+    "section": "elevation"
+   }
+  ],
+  "dos": [
+   "Do give every screen one lead (photo, fish, lake, map) and keep everything else in Body/Secondary text or grouped rows.",
+   "Do write numbers as one quiet line when there are several.",
+   "Do use the theme's text roles and colours; screens should not contain raw sizes or hex values.",
+   "Do keep touch targets at least 44×44pt (48dp on Android).",
+   "Do credit data sources in a Secondary line next to the data."
+  ],
+  "donts": [
+   "Don't put boxes inside boxes, or show a row of equal stat tiles.",
+   "Don't add drop shadows outside the map.",
+   "Don't use uppercase letter-spaced labels or weight 800.",
+   "Don't use lime for buttons, disabled states or ordinary panels.",
+   "Don't show a stat that is zero just to fill a tile.",
+   "Don't use web patterns: breadcrumbs, underlined links, hover hints."
+  ]
+ }
+}

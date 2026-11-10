@@ -55,7 +55,10 @@ Edge Function calls Fishial Recognition API v2 (free plan: 100 credits/month, 1 
 2. **Keep only useful lakes on the server:** named lakes plus lakes with depth or fish data (BC: 4,884 of 16,457 have data), and simplify outlines further. Keeps the database inside the free tier.
 
 ## Map: MapLibre + OpenFreeMap (2026-11-10)
-`@maplibre/maplibre-react-native` v11 with OpenFreeMap's Liberty style. Offline areas via `OfflineManager.createPack`, capped at 3,000 tiles per download (OpenFreeMap terms). Catch pins clustered from local SQLite; saved spots are a synced, private table.
+`@maplibre/maplibre-react-native` v11 with OpenFreeMap's Liberty style. Catch pins clustered from local SQLite; saved spots are a synced, private table.
+**Saved areas:** "Save area" shows a square frame the user positions; it's sized so every area includes street-level detail (zoom 14) within OpenFreeMap's 3,000-tile cap (~70 × 70 km max). Each area is two packs sharing `metadata.group`: map (zoom 8–16) and satellite (zoom 8–14). Total offline maps capped at 300 MB. Limits live in `src/features/map/offline.ts`; Saved areas screen lists/deletes them.
+**Satellite (2026-11-10):** EOX Sentinel-2 cloudless 2025 (10 m/pixel, CC BY-NC-SA 4.0, free for non-commercial, no key) under Liberty's place/water/road labels. Offline packs need an HTTPS style URL, so the `eox-s2cloudless` adapter rebuilds the style monthly and publishes it to the public `map-styles` bucket. Satellite view stops at zoom 15 (only blur beyond).
+**Rejected:** Esri World Imagery and MapTiler Satellite (sharp, but API key and offline caching not allowed); BC government imagery (Access Only); EOX 2016 (allowed offline but old). EOX's FAQ ties offline packs to its paid licence while CC BY-NC-SA permits non-commercial copies; confirm with cloudless@eox.at before any wider release.
 
 ## Photos compressed on device (2026-11-10)
 ≤ 1440 px, JPEG 72% (~150–250 KB) before upload; bucket rejects files > 5 MB. Keeps the 1 GB free storage good for several thousand catches.

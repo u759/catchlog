@@ -5,16 +5,17 @@
 // the next minute's dispatch continues where it stopped.
 //
 // Adapters: one file per region (adapters/bc.ts, later adapters/ab.ts ...) plus region-agnostic sources
-// (adapters/fishbase.ts, adapters/wiki.ts). Register them in ADAPTERS and add a data_sources row.
+// (adapters/fishbase.ts, adapters/wiki.ts, adapters/mapstyles.ts). Register them in ADAPTERS and add a data_sources row.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { bcAdapters } from './adapters/bc.ts';
 import { fishbase } from './adapters/fishbase.ts';
+import { eoxSatelliteStyle } from './adapters/mapstyles.ts';
 import type { Adapter, AdapterState } from './adapters/types.ts';
 import { wikiSpecies } from './adapters/wiki.ts';
 
 const ADAPTERS: Record<string, Adapter> = Object.fromEntries(
-  [...bcAdapters, fishbase, wikiSpecies].map((a) => [a.key, a]),
+  [...bcAdapters, fishbase, wikiSpecies, eoxSatelliteStyle].map((a) => [a.key, a]),
 );
 const TIME_BUDGET_MS = 100_000; // well under the 150 s wall-clock limit
 const LOCK_STALE_MS = 5 * 60_000; // keep in sync with private.dispatch_sync_sources()

@@ -1,9 +1,11 @@
 import * as WebBrowser from 'expo-web-browser';
+import { ChevronRight } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
+import { Group } from '@/components/ui';
 import { useLiveQuery } from '@/lib/sync/db';
-import { colors, radius, space, type } from '@/theme';
+import { colors, space, type } from '@/theme';
 
 type Source = { key: string; name: string; used_for: string | null; licence: string; attribution: string; url: string | null };
 
@@ -17,21 +19,35 @@ export default function Credits() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Data sources" back />
-      <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}>
-        <Text style={type.muted}>CatchLog is a non-commercial hobby app. These sources make it work offline.</Text>
-        {sources.map((s) => (
-          <Pressable key={s.key} style={styles.card} disabled={!s.url} onPress={() => s.url && WebBrowser.openBrowserAsync(s.url)}>
-            <Text style={type.heading}>{s.name}</Text>
-            {s.used_for ? <Text style={type.body}>{s.used_for}</Text> : null}
-            <Text style={type.muted}>{s.attribution}</Text>
-            <Text style={type.muted}>{s.licence}</Text>
-          </Pressable>
-        ))}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl }}>
+        <Text style={type.secondary}>CatchLog is a non-commercial hobby app. These sources make it work offline.</Text>
+        <Group>
+          {sources.map((s) => {
+            // Show the licence on its own line only when the attribution doesn't already name it.
+            const licence = s.licence && !s.attribution.toLowerCase().includes(s.licence.toLowerCase().split(' (')[0]) ? s.licence : null;
+            return (
+              <Pressable
+                key={s.key}
+                accessibilityRole={s.url ? 'link' : undefined}
+                disabled={!s.url}
+                onPress={() => s.url && WebBrowser.openBrowserAsync(s.url)}
+                style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={type.headline}>{s.name}</Text>
+                  {s.used_for ? <Text style={type.body}>{s.used_for}</Text> : null}
+                  <Text style={type.secondary}>{s.attribution}</Text>
+                  {licence ? <Text style={type.caption}>{licence}</Text> : null}
+                </View>
+                {s.url ? <ChevronRight size={18} color={colors.textMuted} /> : null}
+              </Pressable>
+            );
+          })}
+        </Group>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: space.lg, gap: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
 });

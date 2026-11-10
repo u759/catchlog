@@ -50,7 +50,7 @@ export default function SignIn() {
             <>
               <Button
                 label="Continue with Google"
-                variant="accent"
+                variant="secondary"
                 onPress={() => run('google', signInWithGoogle)}
                 loading={busy === 'google'}
                 disabled={!isGoogleConfigured || (busy !== null && busy !== 'google')}
@@ -101,7 +101,7 @@ export default function SignIn() {
               />
               <Button
                 label="Sign in"
-                variant="accent"
+                variant="secondary"
                 onPress={() => run('verify', () => verifyEmailCode(email, code))}
                 loading={busy === 'verify'}
                 disabled={code.length < 6 || busy !== null}
@@ -129,7 +129,7 @@ export default function SignIn() {
   );
 }
 
-const muted = '#C9D6CE';
+const muted = colors.onPrimaryMuted;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary, paddingHorizontal: space.xl },
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 36, fontWeight: '800', color: colors.onPrimary },
+  title: { fontSize: 34, lineHeight: 40, fontWeight: '700', color: colors.onPrimary },
   tagline: { fontSize: 16, color: muted, textAlign: 'center', maxWidth: 300, lineHeight: 22 },
   bottom: { gap: space.md, paddingBottom: space.lg },
   divider: { flexDirection: 'row', alignItems: 'center', gap: space.md },
@@ -159,6 +159,6 @@ const styles = StyleSheet.create({
   codeInput: { fontSize: 24, letterSpacing: 6, textAlign: 'center', fontWeight: '700' },
   prompt: { color: colors.onPrimary, fontSize: 15, textAlign: 'center' },
   links: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space.xs },
-  link: { color: colors.accent, fontSize: 14, fontWeight: '600' },
-  error: { color: '#FFB4AB', textAlign: 'center', fontSize: 14 },
+  link: { color: colors.onPrimary, fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  error: { color: colors.onPrimaryDanger, textAlign: 'center', fontSize: 14 },
 });

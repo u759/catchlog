@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Calendar, Camera, Fish, ImagePlus, MapPin, Save, Sun, X } from 'lucide-react-native';
+import { Calendar, Camera, Fish, ImagePlus } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,8 +19,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ModalHeader } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
-import { Button, Chip, EmptyState, Field, InfoPill } from '@/components/ui';
+import { Button, Chip, EmptyState, Field, Group, Row, Segmented } from '@/components/ui';
 import { saveCatch, useCatch, useUserId } from '@/features/catches/hooks';
 import { type CatchView, parseTs } from '@/features/catches/model';
 import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
@@ -28,6 +29,7 @@ import { useGearList } from '@/features/gear/hooks';
 import { isLure } from '@/features/gear/taxonomy';
 import { detectWaterbody, speciesInWaterbody, type Waterbody } from '@/features/waterbodies/hooks';
 import { useUnits } from '@/features/profile/hooks';
+import { useLiveQuery } from '@/lib/sync/db';
 import {
   fetchCurrentWeather,
   formatTemp,
@@ -102,6 +104,13 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
   const [lake, setLake] = useState<Waterbody | null>(null);
   const [lakeSpecies, setLakeSpecies] = useState<Set<string>>(new Set());
   const { data: gear } = useGearList();
+  // Your catch count per species, so your usual fish are suggested first.
+  const { data: myCounts } = useLiveQuery<{ species_id: string; n: number }>(
+    'SELECT species_id, count(*) AS n FROM catches WHERE user_id = ? AND species_id IS NOT NULL AND deleted_at IS NULL GROUP BY species_id',
+    [userId ?? ''],
+    ['catches'],
+  );
+  const mySpecies = useMemo(() => new Map(myCounts.map((r) => [r.species_id, r.n])), [myCounts]);
   const lures = useMemo(() => gear.filter((g) => isLure(g.category)).slice(0, 10), [gear]);
 
   // Lake at the catch location (local, works offline). Pre-fills the waterbody name and boosts
@@ -158,8 +167,8 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
   const selectedSpecies = speciesId ? speciesIndex.byId.get(speciesId) : undefined;
   const suggestions = useMemo(() => {
     if (selectedSpecies && selectedSpecies.common_name === speciesText) return [];
-    return searchSpecies(speciesIndex, speciesText, regions, 8, lakeSpecies);
-  }, [speciesIndex, speciesText, selectedSpecies, regions, lakeSpecies]);
+    return searchSpecies(speciesIndex, speciesText, regions, 6, lakeSpecies, mySpecies);
+  }, [speciesIndex, speciesText, selectedSpecies, regions, lakeSpecies, mySpecies]);
 
   const lengthMm = parseLength(length, units);
   const estimateG = estimateWeightG(lengthMm, selectedSpecies);
@@ -232,39 +241,37 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
       router.back();
     } catch (e) {
       setSaving(false);
-      Alert.alert('Could not save', e instanceof Error ? e.message : String(e));
+      Alert.alert('Couldn’t save this catch', 'Nothing was lost; your entries are still here. Please try again.');
+      console.warn('saveCatch failed', e);
     }
   }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + space.sm : space.lg }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
-          <X size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[type.heading, { flex: 1, textAlign: 'center' }]}>{isEdit ? 'Edit Catch' : 'Log Catch'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ModalHeader title={isEdit ? 'Edit catch' : 'Log a catch'} />
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {/* Photo */}
-        <View style={styles.photoBox}>
-          {photo ? (
-            <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-          ) : isEdit && existing?.photo_path ? (
-            <CatchPhoto photoPath={existing.photo_path} photoUrl={existing.photo_url} style={StyleSheet.absoluteFill} />
-          ) : null}
-          <View style={styles.photoActions}>
-            <Button label={photo || existing?.photo_path ? 'Retake' : 'Take photo'} icon={Camera} variant="accent" onPress={() => pickPhoto('camera')} style={{ height: 44 }} />
-            <Button label="Library" icon={ImagePlus} variant="secondary" onPress={() => pickPhoto('library')} style={{ height: 44 }} />
+        {photo || existing?.photo_path ? (
+          <View style={styles.photoBox}>
+            {photo ? (
+              <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} contentFit="cover" accessibilityLabel="Catch photo" />
+            ) : (
+              <CatchPhoto photoPath={existing!.photo_path} photoUrl={existing!.photo_url} style={StyleSheet.absoluteFill} />
+            )}
           </View>
+        ) : null}
+        <View style={styles.photoActions}>
+          <Button label={photo || existing?.photo_path ? 'Retake' : 'Take photo'} icon={Camera} variant="secondary"
+            onPress={() => pickPhoto('camera')} style={{ flex: 1 }} />
+          <Button label="Library" icon={ImagePlus} variant="secondary" onPress={() => pickPhoto('library')} style={{ flex: 1 }} />
         </View>
 
         {/* Species */}
         <View style={{ gap: space.sm }}>
           <Field
             label="Species"
-            placeholder="e.g. Largemouth Bass"
+            placeholder="Start typing, e.g. Rainbow Trout"
             value={speciesText}
             onChangeText={(t) => {
               setSpeciesText(t);
@@ -305,20 +312,20 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
           />
         </View>
         {overMax && selectedSpecies?.max_length_mm != null && (
-          <Text style={[type.muted, { color: colors.danger }]}>
+          <Text style={[type.secondary, { color: colors.danger }]}>
             That’s longer than the largest {selectedSpecies.common_name} on record (
             {formatLength(selectedSpecies.max_length_mm, units)} {lengthUnit(units)}). Double-check the length.
           </Text>
         )}
         {estimateG != null && !weight && (
-          <Text style={type.muted}>
+          <Text style={type.secondary}>
             No scale? We’ll save ≈{formatWeight(estimateG, units)} {weightUnit(units)}, estimated from length for this species.
           </Text>
         )}
 
         {/* When */}
         <View style={{ gap: space.xs }}>
-          <Text style={type.label}>WHEN</Text>
+          <Text style={type.caption}>When</Text>
           {Platform.OS === 'ios' ? (
             <View style={styles.inlineCard}>
               <Calendar size={18} color={colors.primary} />
@@ -343,19 +350,20 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
 
         {/* Where + conditions */}
         <View style={{ gap: space.sm }}>
-          <Text style={type.label}>WHERE</Text>
-          <InfoPill
-            icon={MapPin}
-            value={locating ? 'Finding your location…' : (placeName ?? (coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : 'Location unavailable'))}
-          />
-          <Field label="Waterbody / spot" placeholder="e.g. Lake Travis, Sandy Point" value={waterbody} onChangeText={setWaterbody} />
-          {weather && (
-            <InfoPill
-              icon={Sun}
-              label="Conditions (auto)"
-              value={`${formatTemp(weather.temp_c, units)}, ${weatherLabel(weather.weather_code)} · Wind ${formatWind(weather.wind_kph, weather.wind_dir_deg, units)}`}
+          <Field label="Lake or spot" placeholder="e.g. Lac Le Jeune, north bay" value={waterbody} onChangeText={setWaterbody} />
+          <Group>
+            <Row
+              label="Location"
+              value={locating ? 'Finding…' : (placeName ?? (coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : 'Not available'))}
             />
-          )}
+            {weather ? (
+              <Row
+                label="Weather"
+                sub="Added automatically"
+                value={`${formatTemp(weather.temp_c, units)}, ${weatherLabel(weather.weather_code)} · ${formatWind(weather.wind_kph, weather.wind_dir_deg, units)}`}
+              />
+            ) : null}
+          </Group>
         </View>
 
         {/* Tackle */}
@@ -390,46 +398,45 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
           </View>
         )}
 
-        <Field label="Notes" placeholder="How'd it go down?" value={notes} onChangeText={setNotes} multiline style={{ minHeight: 88, fontSize: 16, color: colors.text, textAlignVertical: 'top', paddingVertical: space.md }} />
+        <Field label="Notes" placeholder="How'd it go down?" value={notes} onChangeText={setNotes} multiline style={{ ...type.body, minHeight: 88, textAlignVertical: 'top', paddingVertical: space.md }} />
 
         {/* Options */}
-        <View style={styles.inlineCard}>
-          <Text style={[type.body, { flex: 1 }]}>Released</Text>
-          <Switch value={released} onValueChange={setReleased} trackColor={{ true: colors.primary }} />
-        </View>
+        <Group>
+          <Row
+            label="Released"
+            right={<Switch value={released} onValueChange={setReleased} trackColor={{ true: colors.primary }} accessibilityLabel="Released" />}
+          />
+        </Group>
         <View style={{ gap: space.xs }}>
-          <Text style={type.label}>WHO CAN SEE THIS</Text>
-          <View style={styles.chips}>
-            {(['private', 'friends', 'public'] as const).map((v) => (
-              <Chip key={v} label={v[0].toUpperCase() + v.slice(1)} selected={visibility === v} onPress={() => setVisibility(v)} />
-            ))}
-          </View>
+          <Text style={type.caption}>Who can see this</Text>
+          <Segmented
+            options={[
+              { value: 'private', label: 'Only me' },
+              { value: 'friends', label: 'Friends' },
+              { value: 'public', label: 'Everyone' },
+            ]}
+            value={visibility}
+            onChange={setVisibility}
+          />
         </View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
-        <Button label={isEdit ? 'Save Changes' : 'Save Catch'} icon={Save} onPress={onSave} loading={saving} />
+        <Button label={isEdit ? 'Save changes' : 'Save catch'} onPress={onSave} loading={saving} />
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: space.lg,
-    paddingBottom: space.md,
-  },
-  body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
+  body: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
   photoBox: {
-    height: 220,
+    aspectRatio: 4 / 3,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
-    justifyContent: 'flex-end',
   },
-  photoActions: { flexDirection: 'row', gap: space.sm, padding: space.md, justifyContent: 'center' },
+  photoActions: { flexDirection: 'row', gap: space.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   row: { flexDirection: 'row', gap: space.md },
   inlineCard: {
@@ -439,7 +446,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     paddingHorizontal: space.md,
     minHeight: 48,
   },

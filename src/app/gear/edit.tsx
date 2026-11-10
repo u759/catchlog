@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Save, Trash2, X } from 'lucide-react-native';
+import { Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ModalHeader } from '@/components/AppHeader';
 import { Button, Chip, Field } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { deleteGear, type Gear, saveGear, useGear } from '@/features/gear/hooks';
@@ -38,7 +39,7 @@ function GearForm({ existing }: { existing: Gear | null }) {
 
   const onSave = async () => {
     if (!userId) return;
-    if (!name.trim()) return Alert.alert('Name it', 'e.g. "5" Senko" or "Rapala X-Rap 10".');
+    if (!name.trim()) return Alert.alert('Give it a name', 'For example “5" Senko” or “Rapala X-Rap 10”.');
     await saveGear(
       userId,
       {
@@ -73,16 +74,10 @@ function GearForm({ existing }: { existing: Gear | null }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + space.sm : space.lg }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
-          <X size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[type.heading, { flex: 1, textAlign: 'center' }]}>{existing ? 'Edit Gear' : 'Add Gear'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ModalHeader title={existing ? 'Edit gear' : 'Add gear'} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={{ gap: space.xs }}>
-          <Text style={type.label}>TYPE</Text>
+          <Text style={type.caption}>Type</Text>
           <View style={styles.chips}>
             {GEAR_CATEGORIES.map((c) => (
               <Chip key={c.key} label={c.label} selected={category === c.key} onPress={() => { setCategory(c.key); setSubtype(null); }} />
@@ -110,19 +105,18 @@ function GearForm({ existing }: { existing: Gear | null }) {
           <Field label="Quantity" placeholder="1" value={quantity} onChangeText={setQuantity} keyboardType="number-pad" />
         </View>
         <Field label="Notes" placeholder="Rigging, where it works…" value={notes} onChangeText={setNotes} multiline
-          style={{ minHeight: 80, fontSize: 16, color: colors.text, textAlignVertical: 'top', paddingVertical: space.md }} />
-        {existing && <Button label="Delete" icon={Trash2} variant="ghost" onPress={onDelete} />}
+          style={{ ...type.body, minHeight: 80, textAlignVertical: 'top', paddingVertical: space.md }} />
+        {existing && <Button label="Delete from tackle box" icon={Trash2} variant="danger" onPress={onDelete} style={{ alignSelf: 'flex-start' }} />}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
-        <Button label="Save" icon={Save} onPress={onSave} />
+        <Button label={existing ? 'Save changes' : 'Add to tackle box'} onPress={onSave} />
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingBottom: space.md },
-  body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
+  body: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   row: { flexDirection: 'row', gap: space.md },
   footer: { paddingHorizontal: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },

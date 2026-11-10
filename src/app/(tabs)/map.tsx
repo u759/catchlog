@@ -11,7 +11,7 @@ import {
 } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CloudDownload, Layers, LocateFixed } from 'lucide-react-native';
+import { CloudDownload, Layers, LocateFixed, Map as MapIcon, Satellite } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -19,15 +19,14 @@ import { AppHeader } from '@/components/AppHeader';
 import { Button, Chip } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import {
-  MAX_OFFLINE_BYTES, maxHalfSpan, MIN_DETAIL_ZOOM, offlineBytes, PACK_MIN_ZOOM, packMaxZoom, squareBounds,
+  MAP_STYLE_URL, MAP_VIEW_MAX_ZOOM, MAX_OFFLINE_BYTES, maxHalfSpan, MIN_DETAIL_ZOOM, offlineBytes, PACK_MIN_ZOOM, packMaxZoom, SATELLITE_MAX_ZOOM,
+  SATELLITE_STYLE_URL, SATELLITE_VIEW_MAX_ZOOM, squareBounds,
 } from '@/features/map/offline';
 import { useSpots } from '@/features/spots/hooks';
 import { parseTs } from '@/features/catches/model';
 import { useLiveQuery } from '@/lib/sync/db';
-import { colors, radius, shadow, space } from '@/theme';
+import { colors, floating, radius, space, type } from '@/theme';
 
-// OpenFreeMap: free vector tiles, attribution shown by the map.
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 const WORLD: [number, number] = [0, 20]; // initial view when the phone has no location yet
 
 type Range = '30d' | '1y' | 'all';
@@ -49,6 +48,7 @@ export default function MapTab() {
   };
   const [species, setSpecies] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<number | null>(null);
+  const [satellite, setSatellite] = useState(false);
   const spots = useSpots();
   // /map?focus=w,s,e,n (from Saved areas): zoom to that area once the map is up.
   const { focus } = useLocalSearchParams<{ focus?: string }>();
@@ -161,20 +161,35 @@ export default function MapTab() {
         latitude: (bounds[1] + bounds[3]) / 2, longitude: (bounds[0] + bounds[2]) / 2,
       }).catch(() => []);
       const name = place?.city ?? place?.subregion ?? place?.region ?? 'Saved area';
-      await OfflineManager.createPack(
-        { mapStyle: STYLE_URL, bounds, minZoom: PACK_MIN_ZOOM, maxZoom, metadata: { name, savedAt: new Date().toISOString() } },
-        (_pack, status) => {
-          setDownloading(Math.round(status.percentage));
-          if (status.state === 'complete') {
+      // One saved area = two downloads sharing a group id: the normal map and the satellite view.
+      const group = `${Date.now()}`;
+      const meta = { name, savedAt: new Date().toISOString(), group };
+      const parts = [
+        { mapStyle: MAP_STYLE_URL, maxZoom, kind: 'map' },
+        { mapStyle: SATELLITE_STYLE_URL, maxZoom: SATELLITE_MAX_ZOOM, kind: 'satellite' },
+      ];
+      const progress = new Map<string, number>();
+      let failed = false;
+      for (const part of parts) {
+        await OfflineManager.createPack(
+          { mapStyle: part.mapStyle, bounds, minZoom: PACK_MIN_ZOOM, maxZoom: part.maxZoom, metadata: { ...meta, kind: part.kind } },
+          (_pack, status) => {
+            progress.set(part.kind, status.state === 'complete' ? 100 : status.percentage);
+            const pct = [...progress.values()].reduce((a, b) => a + b, 0) / parts.length;
+            setDownloading(Math.round(pct));
+            if (!failed && progress.size === parts.length && [...progress.values()].every((v) => v === 100)) {
+              setDownloading(null);
+              Alert.alert('Saved for offline', `${name} (map and satellite) will show without signal.`);
+            }
+          },
+          (_pack, err) => {
+            if (failed) return;
+            failed = true;
             setDownloading(null);
-            Alert.alert('Saved for offline', `${name} will show without signal.`);
-          }
-        },
-        (_pack, err) => {
-          setDownloading(null);
-          Alert.alert('Download failed', err.message);
-        },
-      );
+            Alert.alert('Download failed', err.message);
+          },
+        );
+      }
     } catch (err) {
       setDownloading(null);
       Alert.alert('Download failed', String(err));
@@ -188,7 +203,7 @@ export default function MapTab() {
         {start && (
           <MapView
             style={StyleSheet.absoluteFill}
-            mapStyle={STYLE_URL}
+            mapStyle={satellite ? SATELLITE_STYLE_URL : MAP_STYLE_URL}
             onRegionDidChange={(e) => setView(e.nativeEvent)}
             onRegionIsChanging={selecting ? (e) => setView(e.nativeEvent) : undefined}
             touchRotate={!selecting}
@@ -198,7 +213,8 @@ export default function MapTab() {
               const [lng, lat] = e.nativeEvent.lngLat;
               router.push({ pathname: '/spot/edit', params: { lat: String(lat), lng: String(lng) } });
             }}>
-            <Camera ref={camera} initialViewState={{ center: start, zoom: start === WORLD ? 1 : 11 }} />
+            <Camera ref={camera} initialViewState={{ center: start, zoom: start === WORLD ? 1 : 11 }}
+              maxZoom={satellite ? SATELLITE_VIEW_MAX_ZOOM : MAP_VIEW_MAX_ZOOM} />
             <UserLocation accuracy heading />
             <GeoJSONSource
               id="catches"
@@ -224,20 +240,20 @@ export default function MapTab() {
                 type="circle"
                 filter={['has', 'point_count']}
                 paint={{ 'circle-color': colors.primary, 'circle-radius': ['step', ['get', 'point_count'], 16, 10, 20, 50, 26],
-                  'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff' }}
+                  'circle-stroke-width': 3, 'circle-stroke-color': colors.surface }}
               />
               <Layer
                 id="catch-cluster-count"
                 type="symbol"
                 filter={['has', 'point_count']}
                 layout={{ 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 13, 'text-font': ['Noto Sans Bold'] }}
-                paint={{ 'text-color': '#ffffff' }}
+                paint={{ 'text-color': colors.surface }}
               />
               <Layer
                 id="catch-points"
                 type="circle"
                 filter={['!', ['has', 'point_count']]}
-                paint={{ 'circle-color': colors.primary, 'circle-radius': 8, 'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff' }}
+                paint={{ 'circle-color': colors.primary, 'circle-radius': 8, 'circle-stroke-width': 3, 'circle-stroke-color': colors.surface }}
               />
               <Layer
                 id="catch-labels"
@@ -246,7 +262,7 @@ export default function MapTab() {
                 minzoom={12}
                 layout={{ 'text-field': ['get', 'label'], 'text-size': 12, 'text-offset': [0, 1.4], 'text-anchor': 'top',
                   'text-font': ['Noto Sans Regular'] }}
-                paint={{ 'text-color': colors.text, 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 }}
+                paint={{ 'text-color': colors.text, 'text-halo-color': colors.surface, 'text-halo-width': 1.5 }}
               />
             </GeoJSONSource>
             <GeoJSONSource
@@ -257,11 +273,11 @@ export default function MapTab() {
                 if (id) router.push({ pathname: '/spot/edit', params: { id: String(id) } });
               }}>
               <Layer id="spot-points" type="circle"
-                paint={{ 'circle-color': colors.onGold, 'circle-radius': 9, 'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff' }} />
+                paint={{ 'circle-color': colors.onGold, 'circle-radius': 9, 'circle-stroke-width': 3, 'circle-stroke-color': colors.surface }} />
               <Layer id="spot-labels" type="symbol" minzoom={10}
                 layout={{ 'text-field': ['get', 'label'], 'text-size': 12, 'text-offset': [0, 1.4], 'text-anchor': 'top',
                   'text-font': ['Noto Sans Bold'] }}
-                paint={{ 'text-color': colors.onGold, 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 }} />
+                paint={{ 'text-color': colors.onGold, 'text-halo-color': colors.surface, 'text-halo-width': 1.5 }} />
             </GeoJSONSource>
           </MapView>
         )}
@@ -309,7 +325,11 @@ export default function MapTab() {
           </View>
 
           <View style={styles.actions}>
-            <Pressable style={styles.fab} onPress={() => router.push('/offline-areas')} accessibilityLabel="Saved areas">
+            <Pressable style={styles.fab} onPress={() => setSatellite((v) => !v)}
+            accessibilityLabel={satellite ? 'Show map view' : 'Show satellite view'}>
+            {satellite ? <MapIcon size={22} color={colors.text} /> : <Satellite size={22} color={colors.text} />}
+          </Pressable>
+          <Pressable style={styles.fab} onPress={() => router.push('/offline-areas')} accessibilityLabel="Saved areas">
               <Layers size={22} color={colors.text} />
             </Pressable>
             <Pressable style={styles.fab} onPress={recenter} accessibilityLabel="My location">
@@ -342,20 +362,20 @@ const styles = StyleSheet.create({
   filters: { position: 'absolute', top: space.md, left: 0, right: 0 },
   actions: { position: 'absolute', right: space.lg, bottom: space.xl + space.lg, gap: space.md, alignItems: 'flex-end' }, // clear of the ⓘ attribution button
   fab: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
-    ...shadow,
+    minWidth: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
+    ...floating,
   },
   fabWide: { width: undefined, flexDirection: 'row', gap: space.sm, paddingHorizontal: space.lg, backgroundColor: colors.primary,
     borderRadius: radius.pill },
-  fabText: { color: colors.onPrimary, fontWeight: '700' },
-  // Below the filter chips, clear of the map attribution in the bottom corners.
+  fabText: { ...type.headline, color: colors.onPrimary },
   mask: { backgroundColor: 'rgba(0,0,0,0.35)' },
-  frame: { borderWidth: 2, borderColor: '#ffffff', borderRadius: 4 },
+  frame: { borderWidth: 2, borderColor: colors.surface, borderRadius: 4 },
   selectBar: {
     position: 'absolute', left: space.lg, right: space.lg, bottom: space.xl + space.lg, gap: space.sm,
-    backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, ...shadow,
+    backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, ...floating,
   },
-  selectText: { fontSize: 13, color: colors.text, textAlign: 'center' },
-  hint: { position: 'absolute', left: space.lg, top: space.md + 48, fontSize: 11, color: colors.textMuted,
-    backgroundColor: 'rgba(255,255,255,0.8)', paddingHorizontal: 6, borderRadius: 4 },
+  selectText: { ...type.secondary, color: colors.text, textAlign: 'center' },
+  // Below the filter chips, clear of the map attribution in the bottom corners.
+  hint: { ...type.caption, position: 'absolute', left: space.lg, top: space.md + 48, color: colors.text,
+    backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius.sm, overflow: 'hidden' },
 });

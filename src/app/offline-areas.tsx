@@ -7,28 +7,38 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { AppHeader } from '@/components/AppHeader';
 import { EmptyState } from '@/components/ui';
 import { MAX_OFFLINE_BYTES } from '@/features/map/offline';
-import { colors, radius, space, type } from '@/theme';
+import { colors, radius, space, touch, type } from '@/theme';
 
-type Area = { pack: OfflinePack; name: string; savedAt: string | null; bytes: number; percent: number; complete: boolean };
+/** One saved area: its packs (normal map + satellite share metadata.group; older saves are a single pack). */
+type Area = {
+  key: string; packs: OfflinePack[]; name: string; savedAt: string | null; bytes: number; percent: number; complete: boolean;
+  satellite: boolean;
+};
 
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`;
 
 async function fetchAreas(): Promise<Area[]> {
   const packs = await OfflineManager.getPacks();
-  const rows = await Promise.all(
-    packs.map(async (pack) => {
-      const s = await pack.status();
-      return {
-        pack,
-        name: String(pack.metadata?.name ?? 'Saved area'),
-        savedAt: (pack.metadata?.savedAt as string | undefined) ?? null,
-        bytes: s.completedResourceSize,
-        percent: Math.round(s.percentage),
-        complete: s.state === 'complete',
-      };
-    }),
-  );
-  return rows.sort((a, b) => (b.savedAt ?? '').localeCompare(a.savedAt ?? ''));
+  const withStatus = await Promise.all(packs.map(async (pack) => ({ pack, status: await pack.status() })));
+  const groups = new Map<string, typeof withStatus>();
+  for (const p of withStatus) {
+    const key = String(p.pack.metadata?.group ?? p.pack.id);
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  const areas = [...groups].map(([key, items]): Area => {
+    const meta = items[0].pack.metadata ?? {};
+    return {
+      key,
+      packs: items.map((i) => i.pack),
+      name: String(meta.name ?? 'Saved area'),
+      savedAt: (meta.savedAt as string | undefined) ?? null,
+      bytes: items.reduce((n, i) => n + i.status.completedResourceSize, 0),
+      percent: Math.round(items.reduce((n, i) => n + i.status.percentage, 0) / items.length),
+      complete: items.every((i) => i.status.state === 'complete'),
+      satellite: items.some((i) => i.pack.metadata?.kind === 'satellite'),
+    };
+  });
+  return areas.sort((a, b) => (b.savedAt ?? '').localeCompare(a.savedAt ?? ''));
 }
 
 /** Map areas saved for offline use (MapLibre offline packs): see size, jump to one, or delete it. */
@@ -53,32 +63,35 @@ export default function OfflineAreas() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await OfflineManager.deletePack(a.pack.id);
+          for (const p of a.packs) await OfflineManager.deletePack(p.id);
           setVersion((v) => v + 1);
         },
       },
     ]);
 
-  const show = (a: Area) => router.navigate({ pathname: '/map', params: { focus: a.pack.bounds.join(',') } });
+  const show = (a: Area) => router.navigate({ pathname: '/map', params: { focus: a.packs[0].bounds.join(',') } });
   const total = (areas ?? []).reduce((n, a) => n + a.bytes, 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Saved areas" back />
-      <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.md, paddingBottom: space.xxl }}>
         {areas && areas.length === 0 ? (
           <EmptyState icon={CloudOff} title="No saved areas" body="On the map, zoom to where you'll fish and tap “Save area” to use it without signal." />
         ) : null}
         {areas && areas.length > 0 ? (
-          <Text style={type.muted}>{areas.length} area{areas.length > 1 ? 's' : ''} · {mb(total)} of {mb(MAX_OFFLINE_BYTES)} used</Text>
+          <Text style={type.secondary}>{areas.length} area{areas.length > 1 ? 's' : ''}  ·  {mb(total)} of {mb(MAX_OFFLINE_BYTES)} used</Text>
         ) : null}
         {(areas ?? []).map((a) => (
-          <View key={a.pack.id} style={styles.row}>
+          <View key={a.key} style={styles.row}>
             <Pressable style={{ flex: 1, gap: 2 }} onPress={() => show(a)} accessibilityLabel={`Show ${a.name} on the map`}>
-              <Text style={styles.name} numberOfLines={1}>{a.name}</Text>
-              <Text style={type.muted}>
-                {a.complete ? mb(a.bytes) : `Downloading ${a.percent}%`}
-                {a.savedAt ? ` · saved ${new Date(a.savedAt).toLocaleDateString()}` : ''}
+              <Text style={type.headline} numberOfLines={1}>{a.name}</Text>
+              <Text style={type.secondary}>
+                {[
+                  a.complete ? mb(a.bytes) : `Downloading ${a.percent}%`,
+                  a.satellite ? 'map and satellite' : 'map only',
+                  a.savedAt ? new Date(a.savedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+                ].filter(Boolean).join('  ·  ')}
               </Text>
             </Pressable>
             <Pressable style={styles.icon} onPress={() => show(a)} accessibilityLabel="Show on map">
@@ -99,6 +112,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.surface, borderRadius: radius.md,
     padding: space.md,
   },
-  name: { fontSize: 16, fontWeight: '700', color: colors.text },
-  icon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  icon: { width: touch, height: touch, borderRadius: touch / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
 });

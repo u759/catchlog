@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
-import { Check, LogOut, Pencil, Ruler, UserPlus, Users, X } from 'lucide-react-native';
+import { Check, LogOut, Pencil, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Button, Chip, Field, Section } from '@/components/ui';
+import { Button, Field, Group, Row, Section, Segmented } from '@/components/ui';
 import {
   acceptFriend,
   cleanFriendCode,
@@ -20,7 +20,7 @@ import {
 } from '@/features/profile/hooks';
 import { usePendingUploads, useUserId } from '@/features/catches/hooks';
 import { signOut } from '@/lib/auth';
-import { colors, radius, space, type } from '@/theme';
+import { colors, space, touch, type } from '@/theme';
 
 export default function Profile() {
   const { data: profile } = useProfile();
@@ -36,7 +36,7 @@ export default function Profile() {
     editingName !== null &&
     setDisplayName(userId, editingName)
       .then(() => setEditingName(null))
-      .catch((e: Error) => Alert.alert('Could not save name', e.message));
+      .catch(() => Alert.alert('Couldn’t save your name', 'Check your connection and try again.'));
 
   const confirmRemove = (f: Friendship) => {
     const name = f.other.display_name ?? 'this angler';
@@ -51,7 +51,7 @@ export default function Profile() {
       {
         text: action,
         style: 'destructive',
-        onPress: () => removeFriend(f.id).catch((e: Error) => Alert.alert('Error', e.message)),
+        onPress: () => removeFriend(f.id).catch(() => Alert.alert('Couldn’t update friends', 'Check your connection and try again.')),
       },
     ]);
   };
@@ -60,16 +60,16 @@ export default function Profile() {
     addFriend.mutate(code, {
       onSuccess: (msg) => {
         setCode('');
-        Alert.alert('Friends', msg);
+        Alert.alert('Friend request', msg);
       },
-      onError: (e) => Alert.alert('Could not add friend', e.message),
+      onError: (e) => Alert.alert('Couldn’t add that friend', e.message),
     });
 
   // Signing out wipes this device's local copy; warn if anything hasn't uploaded yet.
   const confirmSignOut = () => {
     if (sync.count === 0) return void signOut();
     Alert.alert(
-      'Unsynced changes',
+      'Some changes haven’t uploaded',
       `${sync.count} change${sync.count > 1 ? 's haven’t' : ' hasn’t'} been uploaded yet. Signing out now will lose ${sync.count > 1 ? 'them' : 'it'}. Connect to the internet first to keep ${sync.count > 1 ? 'them' : 'it'}.`,
       [
         { text: 'Stay signed in', style: 'cancel' },
@@ -78,25 +78,28 @@ export default function Profile() {
     );
   };
 
+  const name = profile?.display_name ?? 'Angler';
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Profile" back />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.me}>
           {profile?.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} accessibilityLabel="Your photo" />
           ) : (
-            <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]} />
+            <View style={[styles.avatar, styles.initialWrap]}>
+              <Text style={[type.title, { color: colors.primary }]}>{name.slice(0, 1).toUpperCase()}</Text>
+            </View>
           )}
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1 }}>
             {editingName === null ? (
-              <Pressable
-                style={styles.nameRow}
-                onPress={() => setEditingName(profile?.display_name ?? '')}
-                accessibilityLabel="Edit display name">
-                <Text style={type.heading}>{profile?.display_name ?? 'Angler'}</Text>
-                <Pencil size={14} color={colors.textMuted} />
-              </Pressable>
+              <View style={styles.nameRow}>
+                <Text style={[type.title, { flexShrink: 1 }]} numberOfLines={1}>{name}</Text>
+                <Pressable onPress={() => setEditingName(profile?.display_name ?? '')} accessibilityRole="button"
+                  accessibilityLabel="Edit display name" style={styles.iconButton}>
+                  <Pencil size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
             ) : (
               <View style={styles.nameRow}>
                 <TextInput
@@ -107,38 +110,47 @@ export default function Profile() {
                   maxLength={40}
                   returnKeyType="done"
                   onSubmitEditing={saveName}
+                  accessibilityLabel="Display name"
                 />
-                <Pressable onPress={saveName} hitSlop={8} accessibilityLabel="Save name">
-                  <Check size={20} color={colors.primary} />
+                <Pressable onPress={saveName} accessibilityRole="button" accessibilityLabel="Save name" style={styles.iconButton}>
+                  <Check size={22} color={colors.primary} />
                 </Pressable>
-                <Pressable onPress={() => setEditingName(null)} hitSlop={8} accessibilityLabel="Cancel">
-                  <X size={20} color={colors.textMuted} />
+                <Pressable onPress={() => setEditingName(null)} accessibilityRole="button" accessibilityLabel="Cancel"
+                  style={styles.iconButton}>
+                  <X size={22} color={colors.textMuted} />
                 </Pressable>
               </View>
             )}
-            <Pressable
-              onPress={() =>
-                profile && Share.share({ message: `Add me on CatchLog — my friend code is ${profile.friend_code}` })
-              }>
-              <Text style={type.muted}>
-                Friend code <Text style={styles.code}>{profile?.friend_code ?? '······'}</Text> · tap to share
-              </Text>
-            </Pressable>
           </View>
         </View>
 
-        <Section title="Units" icon={Ruler}>
-          <View style={styles.chips}>
-            <Chip label="Imperial (in / lbs)" selected={units === 'imperial'} onPress={() => setUnits(userId, 'imperial')} />
-            <Chip label="Metric (cm / kg)" selected={units === 'metric'} onPress={() => setUnits(userId, 'metric')} />
-          </View>
+        <Group>
+          <Row
+            label="Your friend code"
+            value={profile?.friend_code ?? '········'}
+            right={
+              <Button label="Share" variant="text" style={{ paddingHorizontal: space.sm }}
+                onPress={() => profile && Share.share({ message: `Add me on CatchLog. My friend code is ${profile.friend_code}` })} />
+            }
+          />
+        </Group>
+
+        <Section title="Units">
+          <Segmented
+            options={[
+              { value: 'metric', label: 'Metric (cm, kg)' },
+              { value: 'imperial', label: 'Imperial (in, lb)' },
+            ]}
+            value={units}
+            onChange={(u) => setUnits(userId, u)}
+          />
         </Section>
 
-        <Section title="Friends" icon={Users}>
+        <Section title="Friends">
           <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-end' }}>
             <Field
-              label="Add by friend code"
-              placeholder="ABCD2345"
+              label="Add a friend by code"
+              placeholder="8 letters and numbers"
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={9}
@@ -147,93 +159,79 @@ export default function Profile() {
             />
             <Button
               label="Add"
-              icon={UserPlus}
-              variant="accent"
+              variant="primary"
               onPress={onAdd}
               loading={addFriend.isPending}
               disabled={cleanFriendCode(code).length !== 8}
-              style={{ height: 48, paddingHorizontal: space.lg }}
+              style={{ minHeight: 48, paddingHorizontal: space.lg }}
             />
           </View>
 
           {friends.length === 0 ? (
-            <Text style={type.muted}>No friends yet. Share your code with your fishing buddies.</Text>
+            <Text style={type.secondary}>No friends yet. Share your code with your fishing buddies.</Text>
           ) : (
-            friends.map((f) => (
-              <View key={f.id} style={styles.friend}>
-                {f.other.avatar_url ? (
-                  <Image source={{ uri: f.other.avatar_url }} style={styles.friendAvatar} />
-                ) : (
-                  <View style={[styles.friendAvatar, { backgroundColor: colors.surfaceAlt }]} />
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={[type.body, { fontWeight: '600' }]}>{f.other.display_name ?? 'Angler'}</Text>
-                  <Text style={type.muted}>
-                    {f.status === 'accepted' ? 'Friends' : f.incoming ? 'Wants to be friends' : 'Request sent'}
-                  </Text>
+            <Group>
+              {friends.map((f) => (
+                <View key={f.id} style={styles.friend}>
+                  {f.other.avatar_url ? (
+                    <Image source={{ uri: f.other.avatar_url }} style={styles.friendAvatar} />
+                  ) : (
+                    <View style={[styles.friendAvatar, styles.initialWrap]}>
+                      <Text style={[type.headline, { color: colors.primary }]}>
+                        {(f.other.display_name ?? 'A').slice(0, 1).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={type.body}>{f.other.display_name ?? 'Angler'}</Text>
+                    <Text style={type.secondary}>
+                      {f.status === 'accepted' ? 'Friends' : f.incoming ? 'Wants to be friends' : 'Request sent'}
+                    </Text>
+                  </View>
+                  {f.status === 'pending' && f.incoming && (
+                    <Button label="Accept" variant="primary" onPress={() => acceptFriend(f.id)}
+                      style={{ minHeight: 40, paddingHorizontal: space.md }} />
+                  )}
+                  <Pressable
+                    onPress={() => confirmRemove(f)}
+                    style={styles.iconButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={f.status === 'accepted' ? 'Remove friend' : f.incoming ? 'Decline' : 'Cancel request'}>
+                    <X size={20} color={colors.textMuted} />
+                  </Pressable>
                 </View>
-                {f.status === 'pending' && f.incoming && (
-                  <Button
-                    label="Accept"
-                    icon={Check}
-                    variant="primary"
-                    onPress={() => acceptFriend(f.id)}
-                    style={{ height: 38, paddingHorizontal: space.md }}
-                  />
-                )}
-                <Pressable
-                  onPress={() => confirmRemove(f)}
-                  hitSlop={8}
-                  style={styles.removeBtn}
-                  accessibilityLabel={f.status === 'accepted' ? 'Remove friend' : f.incoming ? 'Decline' : 'Cancel request'}>
-                  <X size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-            ))
+              ))}
+            </Group>
           )}
         </Section>
 
-        <Button label="Sign out" icon={LogOut} variant="ghost" onPress={confirmSignOut} />
+        <Group>
+          <Row label="Data sources and credits" onPress={() => router.push('/credits')} />
+        </Group>
 
-        <Pressable onPress={() => router.push('/credits')} style={{ alignSelf: 'center' }}>
-          <Text style={[type.muted, { textDecorationLine: 'underline' }]}>Data sources & credits</Text>
-        </Pressable>
+        <Button label="Sign out" icon={LogOut} variant="danger" onPress={confirmSignOut} style={{ alignSelf: 'flex-start' }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
-  me: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.lg,
-  },
+  body: { paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.xl, paddingBottom: space.xxl },
+  me: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   avatar: { width: 64, height: 64, borderRadius: 32 },
-  code: { fontWeight: '800', color: colors.primary, letterSpacing: 1 },
-  chips: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
-  friend: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  initialWrap: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  friend: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, paddingVertical: space.sm },
   friendAvatar: { width: 40, height: 40, borderRadius: 20 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   nameInput: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '700',
     color: colors.text,
     borderBottomWidth: 1,
     borderBottomColor: colors.primary,
     paddingVertical: 2,
   },
-  removeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  iconButton: { width: touch, height: touch, alignItems: 'center', justifyContent: 'center' },
 });
