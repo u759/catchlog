@@ -45,14 +45,14 @@ export default function Leaderboard() {
         ListHeaderComponent={
           <View style={{ gap: space.md, marginBottom: space.sm }}>
             <Segmented options={PERIODS} value={period} onChange={setPeriod} />
-            <Text style={type.secondary}>Each angler’s longest fish, from you, your friends and public catches.</Text>
+            <Text style={type.secondary}>Longest fish per angler: you, your friends, and public catches.</Text>
           </View>
         }
         ListEmptyComponent={
           <EmptyState
             icon={Trophy}
             title="No ranked catches yet"
-            body="Log a catch with a length, then add friends from your Profile to compete."
+            body="Log a catch with a length, then add friends in Profile."
             action={<Button label="Add friends" icon={Users} variant="secondary" onPress={() => router.push('/profile')} />}
           />
         }

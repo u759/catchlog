@@ -57,7 +57,7 @@ export default function OfflineAreas() {
   }, [version]);
 
   const remove = (a: Area) =>
-    Alert.alert(`Delete “${a.name}”?`, 'The map here will no longer show without signal.', [
+    Alert.alert(`Delete “${a.name}”?`, 'You’ll need signal to see this map again.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -77,7 +77,7 @@ export default function OfflineAreas() {
       <AppHeader title="Saved areas" back />
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.md, paddingBottom: space.xxl }}>
         {areas && areas.length === 0 ? (
-          <EmptyState icon={CloudOff} title="No saved areas" body="On the map, zoom to where you'll fish and tap “Save area” to use it without signal." />
+          <EmptyState icon={CloudOff} title="No saved areas" body="On the map, tap “Save area” to use part of the map without signal." />
         ) : null}
         {areas && areas.length > 0 ? (
           <Text style={type.secondary}>{areas.length} area{areas.length > 1 ? 's' : ''}  ·  {mb(total)} of {mb(MAX_OFFLINE_BYTES)} used</Text>

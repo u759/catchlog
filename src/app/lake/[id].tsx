@@ -31,7 +31,7 @@ export default function LakeScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <AppHeader back />
-        <EmptyState icon={Waves} title="Lake not on this phone yet" body="Connect once and lake data downloads for offline use." />
+        <EmptyState icon={Waves} title="Lake not on this phone yet" body="Connect to the internet once to download lake data." />
       </View>
     );
   }
@@ -41,7 +41,7 @@ export default function LakeScreen() {
     try {
       await openDepthMap(url);
     } catch {
-      Alert.alert('Couldn’t open the map', 'Depth maps download the first time you open them, so this needs signal once.');
+      Alert.alert('Couldn’t open the map', 'The first time you open a map, you need signal.');
     } finally {
       setOpening(null);
     }
@@ -96,7 +96,7 @@ export default function LakeScreen() {
 
         <Section title={species.length ? `Fish recorded here (${species.length})` : 'Fish recorded here'}>
           {species.length === 0 ? (
-            <Text style={type.secondary}>No fish observations on record.</Text>
+            <Text style={type.secondary}>No fish recorded here yet.</Text>
           ) : (
             <Group>
               {species.map((s) => (
@@ -132,7 +132,7 @@ export default function LakeScreen() {
         </Section>
 
         {caught > 0 ? null : (
-          <Button label="Log a catch here" variant="secondary" onPress={() => router.push('/catch/new')} />
+          <Button label="Log a catch here" variant="secondary" onPress={() => router.push({ pathname: '/catch/new', params: { lake: lake.id } })} />
         )}
       </ScrollView>
     </View>

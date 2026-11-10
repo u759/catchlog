@@ -42,7 +42,7 @@ export default function SignIn() {
             <Fish size={40} color={colors.onAccent} />
           </View>
           <Text style={styles.title}>CatchLog</Text>
-          <Text style={styles.tagline}>Every catch, logged. Synced across your devices, even off the grid.</Text>
+          <Text style={styles.tagline}>Log your catches, even with no signal.</Text>
         </View>
 
         <View style={styles.bottom}>

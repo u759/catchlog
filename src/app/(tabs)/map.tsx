@@ -5,31 +5,41 @@ import {
   type GeoJSONSourceRef,
   Layer,
   Map as MapView,
+  type MapRef,
   OfflineManager,
   UserLocation,
   type ViewState,
 } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CloudDownload, Layers, LocateFixed, Map as MapIcon, Satellite } from 'lucide-react-native';
+import { CloudDownload, Layers, LocateFixed } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Button, Chip } from '@/components/ui';
+import { Button, Dropdown, Group, Row, Segmented, Sheet, Tip } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import {
   MAP_STYLE_URL, MAP_VIEW_MAX_ZOOM, MAX_OFFLINE_BYTES, maxHalfSpan, MIN_DETAIL_ZOOM, offlineBytes, PACK_MIN_ZOOM, packMaxZoom, SATELLITE_MAX_ZOOM,
   SATELLITE_STYLE_URL, SATELLITE_VIEW_MAX_ZOOM, squareBounds,
 } from '@/features/map/offline';
 import { useSpots } from '@/features/spots/hooks';
+import { useTip } from '@/features/tips';
 import { parseTs } from '@/features/catches/model';
-import { useLiveQuery } from '@/lib/sync/db';
+import { db, useLiveQuery } from '@/lib/sync/db';
 import { colors, floating, radius, space, type } from '@/theme';
 
+/** Lake outlines: the biggest lakes in view, at any zoom. */
+const MAX_LAKE_OUTLINES = 300;
+const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 const WORLD: [number, number] = [0, 20]; // initial view when the phone has no location yet
 
 type Range = '30d' | '1y' | 'all';
+const RANGES: { value: Range; label: string }[] = [
+  { value: 'all', label: 'All time' },
+  { value: '1y', label: 'This year' },
+  { value: '30d', label: '30 days' },
+];
 
 /** Earliest catch time shown for a date filter (evaluated when the filter is tapped). */
 const cutoffFor = (r: Range) => (r === 'all' ? 0 : Date.now() - (r === '30d' ? 30 : 365) * 86_400_000);
@@ -49,7 +59,11 @@ export default function MapTab() {
   const [species, setSpecies] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<number | null>(null);
   const [satellite, setSatellite] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [selecting, setSelecting] = useState(false); // choosing an area to save
+  const [tipVisible, dismissTip] = useTip('map-offline');
   const spots = useSpots();
+  const mapRef = useRef<MapRef>(null);
   // /map?focus=w,s,e,n (from Saved areas): zoom to that area once the map is up.
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   useEffect(() => {
@@ -86,7 +100,7 @@ export default function MapTab() {
       e.n += 1;
       counts.set(c.species_id, e);
     }
-    return [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 8);
+    return [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 12);
   }, [catches]);
 
   const catchGeo = useMemo(() => {
@@ -116,6 +130,74 @@ export default function MapTab() {
     [spots],
   );
 
+  // Lakes we have data for, outlined (bounding box) so they're visibly tappable. Only lakes intersecting the
+  // current view, biggest first, at most MAX_LAKE_OUTLINES; zooming in reveals smaller lakes. Re-queried when the
+  // map stops moving (local SQLite, offline).
+  const [lakeGeo, setLakeGeo] = useState<GeoJSON.FeatureCollection>(EMPTY);
+  const lakeKey = view && !selecting ? view.bounds.map((v) => v.toFixed(3)).join(',') : '';
+  useEffect(() => {
+    if (!lakeKey) return;
+    let alive = true;
+    const [w, s, e, n] = lakeKey.split(',').map(Number);
+    db.getAllAsync<{ id: string; west: number; south: number; east: number; north: number; area_ha: number | null }>(
+      `SELECT id, west, south, east, north, area_ha FROM waterbodies
+       WHERE east >= ? AND west <= ? AND north >= ? AND south <= ? AND west IS NOT NULL
+       ORDER BY area_ha DESC LIMIT ${MAX_LAKE_OUTLINES}`,
+      [w, e, s, n],
+    )
+      .then((rows) => {
+        if (!alive) return;
+        setLakeGeo({
+          type: 'FeatureCollection',
+          features: rows.map((r) => ({
+            type: 'Feature',
+            id: r.id,
+            properties: { id: r.id, area: r.area_ha ?? 0 },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[r.west, r.south], [r.east, r.south], [r.east, r.north], [r.west, r.north], [r.west, r.south]]],
+            },
+          })),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [lakeKey]);
+  const showLakes = lakeKey !== '';
+
+  // One tap handler, in priority order: catch pins, saved spots, then the smallest lake under the finger.
+  const onMapPress = async (point: [number, number]) => {
+    const map = mapRef.current;
+    if (!map || selecting) return;
+    const box: [[number, number], [number, number]] = [[point[0] - 14, point[1] - 14], [point[0] + 14, point[1] + 14]];
+    const query = (layers: string[], at: typeof box | [number, number] = box) =>
+      map.queryRenderedFeatures(at as never, { layers }).catch(() => [] as GeoJSON.Feature[]);
+
+    const [c] = await query(['catch-clusters', 'catch-points']);
+    if (c) {
+      const props = c.properties ?? {};
+      if (props.cluster) {
+        const zoom = await catchSource.current?.getClusterExpansionZoom(Number(props.cluster_id));
+        const [lng, lat] = (c.geometry as GeoJSON.Point).coordinates;
+        camera.current?.easeTo({ center: [lng, lat], zoom: zoom ?? 14 });
+      } else if (props.id) {
+        router.push({ pathname: '/catch/[id]', params: { id: String(props.id) } });
+      }
+      return;
+    }
+    const [spot] = await query(['spot-points']);
+    if (spot?.properties?.id) {
+      router.push({ pathname: '/spot/edit', params: { id: String(spot.properties.id) } });
+      return;
+    }
+    if (!showLakes) return;
+    const lakes = await query(['lake-fill'], point);
+    const lake = lakes.sort((a, b) => Number(a.properties?.area ?? 0) - Number(b.properties?.area ?? 0))[0];
+    if (lake?.properties?.id) router.push({ pathname: '/lake/[id]', params: { id: String(lake.properties.id) } });
+  };
+
   const recenter = async () => {
     const p = await Location.getLastKnownPositionAsync().catch(() => null);
     if (p) camera.current?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 13 });
@@ -123,7 +205,6 @@ export default function MapTab() {
 
   // "Save area": a square frame in the middle of the map; the user pans/zooms the map under it. The frame
   // shrinks when zoomed out so it never covers more than can be saved with street-level detail.
-  const [selecting, setSelecting] = useState(false);
   const [mapSize, setMapSize] = useState<{ width: number; height: number } | null>(null);
   const frame = useMemo(() => {
     if (!view || !mapSize) return null;
@@ -179,20 +260,20 @@ export default function MapTab() {
             setDownloading(Math.round(pct));
             if (!failed && progress.size === parts.length && [...progress.values()].every((v) => v === 100)) {
               setDownloading(null);
-              Alert.alert('Saved for offline', `${name} (map and satellite) will show without signal.`);
+              Alert.alert('Area saved', `${name} now works without signal.`);
             }
           },
           (_pack, err) => {
             if (failed) return;
             failed = true;
             setDownloading(null);
-            Alert.alert('Download failed', err.message);
+            Alert.alert('Couldn’t save this area', 'Check your signal and try again.');
           },
         );
       }
-    } catch (err) {
+    } catch {
       setDownloading(null);
-      Alert.alert('Download failed', String(err));
+      Alert.alert('Couldn’t save this area', 'Check your signal and try again.');
     }
   };
 
@@ -202,7 +283,9 @@ export default function MapTab() {
       <View style={{ flex: 1 }} onLayout={(e) => setMapSize(e.nativeEvent.layout)}>
         {start && (
           <MapView
+            ref={mapRef}
             style={StyleSheet.absoluteFill}
+            onPress={(e) => void onMapPress(e.nativeEvent.point)}
             mapStyle={satellite ? SATELLITE_STYLE_URL : MAP_STYLE_URL}
             onRegionDidChange={(e) => setView(e.nativeEvent)}
             onRegionIsChanging={selecting ? (e) => setView(e.nativeEvent) : undefined}
@@ -216,25 +299,18 @@ export default function MapTab() {
             <Camera ref={camera} initialViewState={{ center: start, zoom: start === WORLD ? 1 : 11 }}
               maxZoom={satellite ? SATELLITE_VIEW_MAX_ZOOM : MAP_VIEW_MAX_ZOOM} />
             <UserLocation accuracy heading />
+            <GeoJSONSource id="lakes" data={showLakes ? lakeGeo : EMPTY}>
+              <Layer id="lake-fill" type="fill" paint={{ 'fill-color': colors.primary, 'fill-opacity': 0.05 }} />
+              <Layer id="lake-outline" type="line"
+                paint={{ 'line-color': satellite ? colors.surface : colors.primary, 'line-opacity': satellite ? 0.7 : 0.4, 'line-width': 1.25 }} />
+            </GeoJSONSource>
             <GeoJSONSource
               id="catches"
               ref={catchSource}
               data={catchGeo}
               cluster
               clusterRadius={40}
-              clusterMaxZoom={14}
-              onPress={async (e) => {
-                const f = e.nativeEvent.features[0];
-                if (!f) return;
-                const props = f.properties ?? {};
-                if (props.cluster) {
-                  const zoom = await catchSource.current?.getClusterExpansionZoom(Number(props.cluster_id));
-                  const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
-                  camera.current?.easeTo({ center: [lng, lat], zoom: zoom ?? 14 });
-                } else if (props.id) {
-                  router.push({ pathname: '/catch/[id]', params: { id: String(props.id) } });
-                }
-              }}>
+              clusterMaxZoom={14}>
               <Layer
                 id="catch-clusters"
                 type="circle"
@@ -267,11 +343,7 @@ export default function MapTab() {
             </GeoJSONSource>
             <GeoJSONSource
               id="spots"
-              data={spotGeo}
-              onPress={(e) => {
-                const id = e.nativeEvent.features[0]?.properties?.id;
-                if (id) router.push({ pathname: '/spot/edit', params: { id: String(id) } });
-              }}>
+              data={spotGeo}>
               <Layer id="spot-points" type="circle"
                 paint={{ 'circle-color': colors.onGold, 'circle-radius': 9, 'circle-stroke-width': 3, 'circle-stroke-color': colors.surface }} />
               <Layer id="spot-labels" type="symbol" minzoom={10}
@@ -312,55 +384,105 @@ export default function MapTab() {
           </>
         ) : (
           <>
-          <View style={styles.filters} pointerEvents="box-none">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
-              {(['all', '1y', '30d'] as Range[]).map((r) => (
-                <Chip key={r} label={r === 'all' ? 'All time' : r === '1y' ? 'This year' : '30 days'} selected={range === r} onPress={() => pickRange(r)} />
-              ))}
-              <Chip label="All species" selected={!species} onPress={() => setSpecies(null)} />
-              {speciesChips.map((s) => (
-                <Chip key={s.id} label={`${s.name} (${s.n})`} selected={species === s.id} onPress={() => setSpecies(s.id)} />
-              ))}
-            </ScrollView>
-          </View>
+            <View style={styles.filters} pointerEvents="box-none">
+              <View style={styles.filterPanel}>
+                <View style={{ flex: 1 }}>
+                  <Segmented options={RANGES} value={range} onChange={pickRange} />
+                </View>
+                <Dropdown
+                  accessibilityLabel="Show catches of"
+                  options={[
+                    { value: null, label: 'All fish', detail: String(catches.length) },
+                    ...speciesChips.map((o) => ({ value: o.id as string | null, label: o.name, detail: String(o.n) })),
+                  ]}
+                  value={species}
+                  onChange={setSpecies}
+                  buttonStyle={{ maxWidth: 150 }}
+                />
+              </View>
+              {!tipVisible && <Text style={styles.hint} pointerEvents="none">Long-press to save a spot</Text>}
+            </View>
 
-          <View style={styles.actions}>
-            <Pressable style={styles.fab} onPress={() => setSatellite((v) => !v)}
-            accessibilityLabel={satellite ? 'Show map view' : 'Show satellite view'}>
-            {satellite ? <MapIcon size={22} color={colors.text} /> : <Satellite size={22} color={colors.text} />}
-          </Pressable>
-          <Pressable style={styles.fab} onPress={() => router.push('/offline-areas')} accessibilityLabel="Saved areas">
-              <Layers size={22} color={colors.text} />
-            </Pressable>
-            <Pressable style={styles.fab} onPress={recenter} accessibilityLabel="My location">
-              <LocateFixed size={22} color={colors.text} />
-            </Pressable>
-            <Pressable style={[styles.fab, styles.fabWide]} onPress={startSelecting} disabled={downloading !== null}
-              accessibilityLabel="Save visible area for offline">
-              {downloading !== null ? (
-                <>
-                  <ActivityIndicator color={colors.onPrimary} />
-                  <Text style={styles.fabText}>{downloading}%</Text>
-                </>
-              ) : (
-                <>
-                  <CloudDownload size={20} color={colors.onPrimary} />
-                  <Text style={styles.fabText}>Save area</Text>
-                </>
+            <View style={styles.actions} pointerEvents="box-none">
+              {tipVisible && (
+                <Tip
+                  style={styles.tip}
+                  text="Before a trip, save the area you’ll fish so the map works without signal."
+                  onDismiss={dismissTip}
+                />
               )}
-            </Pressable>
-          </View>
-          <Text style={styles.hint} pointerEvents="none">Long-press to save a spot</Text>
+              <View style={styles.actionRow} pointerEvents="box-none">
+                <Pressable style={[styles.fab, styles.fabWide]} onPress={startSelecting} disabled={downloading !== null}
+                  accessibilityRole="button" accessibilityLabel="Save an area for offline use">
+                  {downloading !== null ? (
+                    <>
+                      <ActivityIndicator color={colors.onPrimary} />
+                      <Text style={styles.fabText}>{downloading}%</Text>
+                    </>
+                  ) : (
+                    <>
+                      <CloudDownload size={20} color={colors.onPrimary} />
+                      <Text style={styles.fabText}>Save area</Text>
+                    </>
+                  )}
+                </Pressable>
+                <View style={{ flex: 1 }} />
+                <View style={{ gap: space.md }}>
+                  <Pressable style={styles.fab} onPress={() => setLayersOpen(true)} accessibilityRole="button"
+                    accessibilityLabel={`Map layers, ${satellite ? 'satellite' : 'map'} view`}>
+                    <Layers size={22} color={colors.text} />
+                  </Pressable>
+                  <Pressable style={styles.fab} onPress={recenter} accessibilityRole="button" accessibilityLabel="Go to my location">
+                    <LocateFixed size={22} color={colors.text} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
           </>
         )}
       </View>
+
+      <Sheet visible={layersOpen} title="Map" onClose={() => setLayersOpen(false)}>
+        {(close) => (
+          <>
+            <Segmented
+              options={[
+                { value: 'map', label: 'Map' },
+                { value: 'satellite', label: 'Satellite' },
+              ]}
+              value={satellite ? 'satellite' : 'map'}
+              onChange={(v) => setSatellite(v === 'satellite')}
+            />
+            <Group>
+              <Row label="Saved areas" sub="Use the map without signal" onPress={() => close(() => router.push('/offline-areas'))} />
+              <Row label="Save an area" sub="Pick part of the map to keep" onPress={() => close(startSelecting)} />
+            </Group>
+            <Text style={type.caption}>
+              {satellite
+                ? 'Satellite: EOxCloudless 2025 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2025)'
+                : 'Map: OpenFreeMap © OpenMapTiles, data © OpenStreetMap contributors'}
+            </Text>
+          </>
+        )}
+      </Sheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  filters: { position: 'absolute', top: space.md, left: 0, right: 0 },
-  actions: { position: 'absolute', right: space.lg, bottom: space.xl + space.lg, gap: space.md, alignItems: 'flex-end' }, // clear of the ⓘ attribution button
+  filters: { position: 'absolute', top: space.sm, left: space.lg, right: space.lg, gap: space.sm, alignItems: 'flex-start' },
+  filterPanel: {
+    flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'stretch', backgroundColor: colors.surface,
+    borderRadius: radius.lg, padding: space.xs, ...floating,
+  },
+  // Bottom controls sit clear of the map attribution (logo bottom-left, ⓘ bottom-right).
+  actions: { position: 'absolute', left: space.lg, right: space.lg, bottom: space.xl + space.lg, gap: space.md },
+  actionRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  tip: { ...floating },
+  hint: {
+    ...type.caption, color: colors.text, backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: space.sm,
+    paddingVertical: 2, borderRadius: radius.sm, overflow: 'hidden',
+  },
   fab: {
     minWidth: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
     ...floating,
@@ -375,7 +497,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, ...floating,
   },
   selectText: { ...type.secondary, color: colors.text, textAlign: 'center' },
-  // Below the filter chips, clear of the map attribution in the bottom corners.
-  hint: { ...type.caption, position: 'absolute', left: space.lg, top: space.md + 48, color: colors.text,
-    backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius.sm, overflow: 'hidden' },
 });

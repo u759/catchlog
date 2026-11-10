@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -31,7 +32,8 @@ const toWaterbody = (r: Record<string, unknown>): Waterbody => ({
 
 export function useWaterbody(id: string | null | undefined) {
   const { data } = useLiveQuery<Record<string, unknown>>('SELECT * FROM waterbodies WHERE id = ?', [id ?? ''], ['waterbodies']);
-  return data[0] ? toWaterbody(data[0]) : null;
+  const row = data[0];
+  return useMemo(() => (row ? toWaterbody(row) : null), [row]);
 }
 
 /** Species recorded in a waterbody, plus whether you've caught each. */

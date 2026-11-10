@@ -79,7 +79,7 @@ function SpotForm({ existing, point }: { existing: Spot | null; point: { lat: nu
           />
           {nav ? (
             <Row
-              label="From your last position"
+              label="Distance from you"
               value={`${formatDistance(nav.distance, units)} · ${Math.round(nav.bearing)}° ${COMPASS[Math.round(nav.bearing / 45) % 8]}`}
             />
           ) : null}

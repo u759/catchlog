@@ -25,6 +25,8 @@ Canadian fish from Wild Species 2020 (gov't species list, built once by `scripts
 **Kept (user decision):** FishBase display precedence: AFS official English name else FishBase's default name; Canadian spawning records else other countries'; observed depth range else FishBase's common-depth estimate.
 **Rejected:** fuzzy matching; hand-maintained mapping tables.
 
+**Dex views (2026-11-10):** "Near me" (species recorded in lakes within ~50 km of your last known position, computed on the phone from synced lake data), "<regions> lakes" (every lake on the phone; label comes from `waterbodies.region`, e.g. "BC lakes"), and "All". Default is the first that has data. On first open, before lake data has synced, the Dex says "Getting lake data…" instead of showing everything.
+
 ## Friends
 Friend codes are 8 chars, hidden by column privileges; requests only via `send_friend_request` RPC (online). Profiles visible only to self, friends/pending, and owners of public catches. One friendship row per pair.
 

@@ -88,7 +88,7 @@ export default function SpeciesScreen() {
     ['Where in the water', environmentLabel(s.environment)],
     ['Migration', migrationLabel(s.migration)],
     ['Depth', depth],
-    ['Preferred water temperature', temp],
+    ['Water temperature', temp],
     ['Spawning months', spawning || null],
     ['Feeding', s.feeding],
     ['Diet', s.diet],

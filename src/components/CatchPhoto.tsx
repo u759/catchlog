@@ -29,7 +29,9 @@ export function CatchPhoto({ photoPath, photoUrl, style, iconSize = 28 }: Props)
     );
   }
   return (
-    <Image source={source} style={[styles.image, style]} contentFit="cover" cachePolicy="memory-disk" transition={150} />
+    // expo-image decodes at the view's size (allowDownscaling), so a 52 pt row never holds a full-size photo in memory.
+    <Image source={source} style={[styles.image, style]} contentFit="cover" cachePolicy="memory-disk" transition={150}
+      recyclingKey={photoPath ?? photoUrl ?? undefined} />
   );
 }
 

@@ -64,7 +64,7 @@ export default function GearTab() {
           <EmptyState
             icon={Package}
             title="Your tackle box is empty"
-            body="Add the lures and gear you fish with, then pick them when you log a catch to see what actually works."
+            body="Add the lures you use. Pick one when you log a catch to see what works."
             action={<Button label="Add gear" icon={Plus} onPress={() => router.push('/gear/edit')} style={{ alignSelf: 'stretch' }} />}
           />
         }

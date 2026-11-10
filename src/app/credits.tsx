@@ -20,7 +20,7 @@ export default function Credits() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Data sources" back />
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl }}>
-        <Text style={type.secondary}>CatchLog is a non-commercial hobby app. These sources make it work offline.</Text>
+        <Text style={type.secondary}>Where CatchLog’s data comes from. CatchLog is a free, non-commercial app.</Text>
         <Group>
           {sources.map((s) => {
             // Show the licence on its own line only when the attribution doesn't already name it.

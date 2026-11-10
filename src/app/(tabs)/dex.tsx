@@ -1,33 +1,72 @@
 import { Image } from 'expo-image';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { Fish, Search } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Badge, Chip, EmptyState, Segmented } from '@/components/ui';
+import { Badge, Dropdown, EmptyState } from '@/components/ui';
 import { localPhotoUri } from '@/features/catches/photos';
 import { environmentLabel } from '@/features/collection/fishbaseLabels';
-import { type DexEntry, useDex } from '@/features/collection/hooks';
+import { usePendingUploads } from '@/features/catches/hooks';
+import { type DexEntry, NEAR_KM, useDex, useLakeRegions, useNearbySpecies } from '@/features/collection/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { colors, radius, space, type } from '@/theme';
 import { formatLength, lengthUnit } from '@/utils/units';
 
-type Scope = 'lakes' | 'all';
+type Scope = 'near' | 'lakes' | 'all';
 
-/** Fish you could actually meet: recorded in a lake on this phone, or already caught by you. */
-const inYourLakes = (e: DexEntry) => e.lakes > 0 || e.caught > 0;
+/** Fish recorded in a lake on this phone, or already caught by you. */
+const inLakes = (e: DexEntry) => e.lakes > 0 || e.caught > 0;
 
 export default function Dex() {
   const { entries } = useDex();
   const units = useUnits();
-  const lakeCount = useMemo(() => entries.filter(inYourLakes).length, [entries]);
+  const sync = usePendingUploads();
+  const regions = useLakeRegions();
+  const regionLabel = regions.length ? `${regions.join(' + ')} lakes` : 'Lakes';
+
+  // Your position (last known; asks for location permission the first time).
+  const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const perm = await Location.getForegroundPermissionsAsync();
+      const granted = perm.granted || (perm.canAskAgain && (await Location.requestForegroundPermissionsAsync()).granted);
+      if (!granted) return;
+      const p = (await Location.getLastKnownPositionAsync()) ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+      if (alive && p) setHere({ lat: p.coords.latitude, lng: p.coords.longitude });
+    })().catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const nearby = useNearbySpecies(here);
+
+  const lakeCount = useMemo(() => entries.filter(inLakes).length, [entries]);
+  const nearCount = useMemo(() => (nearby.size ? entries.filter((e) => nearby.has(e.id) || e.caught > 0).length : 0), [entries, nearby]);
   const [scopeChoice, setScope] = useState<Scope | null>(null);
-  const scope: Scope = scopeChoice ?? (lakeCount > 0 ? 'lakes' : 'all');
+  const scope: Scope = scopeChoice ?? (nearCount > 0 ? 'near' : lakeCount > 0 ? 'lakes' : 'all');
+  // First open: lake data hasn't arrived yet.
+  const waitingForData = !sync.hasSynced && sync.connected && lakeCount === 0;
   const [group, setGroup] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  const inScope = useMemo(() => (scope === 'lakes' ? entries.filter(inYourLakes) : entries), [entries, scope]);
+  // Near me / lakes views put your fish first, then the most widespread (where you're most likely to meet them);
+  // "All" stays in Dex-number order.
+  const inScope = useMemo(() => {
+    if (waitingForData) return [];
+    if (scope === 'near') {
+      return entries
+        .filter((e) => nearby.has(e.id) || e.caught > 0)
+        .sort((a, b) => Number(b.caught > 0) - Number(a.caught > 0) || (nearby.get(b.id) ?? 0) - (nearby.get(a.id) ?? 0) || a.dex_no - b.dex_no);
+    }
+    if (scope === 'lakes') {
+      return entries.filter(inLakes).sort((a, b) => Number(b.caught > 0) - Number(a.caught > 0) || b.lakes - a.lakes || a.dex_no - b.dex_no);
+    }
+    return entries;
+  }, [entries, scope, nearby, waitingForData]);
   const caughtCount = inScope.filter((e) => e.caught > 0).length;
   // Groups are FishBase families (by their common name), most species first.
   const groupsPresent = useMemo(() => {
@@ -56,65 +95,84 @@ export default function Dex() {
         numColumns={2}
         columnWrapperStyle={{ gap: space.md }}
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl }}
-        initialNumToRender={12}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
         windowSize={7}
+        removeClippedSubviews
         ListHeaderComponent={
-          <View style={{ gap: space.lg, marginBottom: space.sm }}>
-            <View style={{ gap: space.sm }}>
-              <Text style={type.body}>
-                <Text style={type.headline}>{caughtCount}</Text> of {inScope.length} {scope === 'lakes' ? 'lake fish' : 'species'} caught
+          <View style={{ gap: space.md, marginBottom: space.xs }}>
+            <View style={styles.row}>
+              <Text style={[type.body, { flex: 1 }]} accessibilityLabel={`${caughtCount} of ${inScope.length} caught`}>
+                <Text style={type.headline}>{caughtCount}</Text> of {inScope.length} caught
               </Text>
-              <View style={styles.bar} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: inScope.length, now: caughtCount }}>
-                <View style={[styles.barFill, { width: `${Math.max(progress * 100, caughtCount ? 2 : 0)}%` }]} />
+              {lakeCount > 0 && (
+                <Dropdown
+                  neutral
+                  accessibilityLabel="Which fish"
+                  options={[
+                    ...(nearCount > 0 ? [{ value: 'near' as Scope, label: 'Near me', detail: `${nearCount} · ${NEAR_KM} km` }] : []),
+                    { value: 'lakes' as Scope, label: regionLabel, detail: String(lakeCount) },
+                    { value: 'all' as Scope, label: 'All species', detail: entries.length.toLocaleString() },
+                  ]}
+                  value={scope}
+                  onChange={(v) => {
+                    setScope(v);
+                    setGroup(null);
+                  }}
+                />
+              )}
+            </View>
+            <View style={styles.bar} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: inScope.length, now: caughtCount }}>
+              <View style={[styles.barFill, { width: `${Math.max(progress * 100, caughtCount ? 2 : 0)}%` }]} />
+            </View>
+            {waitingForData && (
+              <View style={styles.row}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[type.secondary, { flex: 1, color: colors.text }]}>Getting lake data…</Text>
               </View>
-            </View>
-            {lakeCount > 0 && (
-              <Segmented
-                options={[
-                  { value: 'lakes', label: `In your lakes (${lakeCount})` },
-                  { value: 'all', label: 'All species' },
-                ]}
-                value={scope}
-                onChange={(v) => {
-                  setScope(v);
-                  setGroup(null);
-                }}
-              />
             )}
-            <View style={styles.search}>
-              <Search size={18} color={colors.textMuted} />
-              <TextInput
-                placeholder="Search by name or number"
-                placeholderTextColor={colors.textMuted}
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                autoCorrect={false}
-                accessibilityLabel="Search species"
-                clearButtonMode="while-editing"
-              />
-            </View>
-            {groupsPresent.length > 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }} style={{ marginHorizontal: -space.lg }}>
-                <Chip label="All families" selected={!group} onPress={() => setGroup(null)} />
-                {groupsPresent.map((g) => (
-                  <Chip key={g} label={g} selected={group === g} onPress={() => setGroup(g)} />
-                ))}
-              </ScrollView>
+            {!waitingForData && lakeCount === 0 && !sync.connected && (
+              <Text style={[type.secondary, { color: colors.text }]}>Connect once to see which fish live in your lakes.</Text>
             )}
+            <View style={styles.row}>
+              <View style={styles.search}>
+                <Search size={18} color={colors.textMuted} />
+                <TextInput
+                  placeholder="Name or number"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  autoCorrect={false}
+                  accessibilityLabel="Search species"
+                  clearButtonMode="while-editing"
+                />
+              </View>
+              {groupsPresent.length > 1 && (
+                <Dropdown
+                  accessibilityLabel="Family"
+                  options={[
+                    { value: null as string | null, label: 'All families' },
+                    ...groupsPresent.map((g) => ({ value: g as string | null, label: g })),
+                  ]}
+                  value={group}
+                  onChange={setGroup}
+                  buttonStyle={{ maxWidth: 150, minHeight: 44 }}
+                />
+              )}
+            </View>
           </View>
         }
         ListEmptyComponent={
-          <EmptyState icon={Fish} title="No fish match" body={query ? 'Try another name or a Dex number.' : 'Log a catch to start your collection.'} />
+          waitingForData ? undefined : <EmptyState icon={Fish} title="No fish match" body={query ? 'Try another name or a Dex number.' : 'Log a catch to start your collection.'} />
         }
-        renderItem={({ item }) => <DexCard entry={item} units={units} />}
+        renderItem={({ item }) => <DexCard entry={item} units={units} nearLakes={scope === 'near' ? (nearby.get(item.id) ?? 0) : null} />}
       />
     </View>
   );
 }
 
-function DexCard({ entry: e, units }: { entry: DexEntry; units: ReturnType<typeof useUnits> }) {
+function DexCard({ entry: e, units, nearLakes }: { entry: DexEntry; units: ReturnType<typeof useUnits>; nearLakes: number | null }) {
   const found = e.caught > 0;
   const photo = (found && localPhotoUri(e.best_photo)) || null;
   const image = photo ?? e.thumb;
@@ -122,7 +180,9 @@ function DexCard({ entry: e, units }: { entry: DexEntry; units: ReturnType<typeo
     ? e.pb_length_mm != null
       ? `Best ${formatLength(e.pb_length_mm, units)} ${lengthUnit(units)}`
       : `Caught ${e.caught}×`
-    : e.lakes > 0
+    : nearLakes
+      ? `In ${nearLakes} lake${nearLakes > 1 ? 's' : ''} near you`
+      : e.lakes > 0
       ? `In ${e.lakes} lake${e.lakes > 1 ? 's' : ''}`
       : (environmentLabel(e.environment) ?? e.family_common ?? '');
   return (
@@ -133,7 +193,8 @@ function DexCard({ entry: e, units }: { entry: DexEntry; units: ReturnType<typeo
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}>
       <View style={styles.imageBox}>
         {image ? (
-          <Image source={{ uri: image }} style={[StyleSheet.absoluteFill, !found && styles.uncaught]} contentFit="cover" cachePolicy="disk" />
+          <Image source={{ uri: image }} style={[StyleSheet.absoluteFill, !found && styles.uncaught]} contentFit="cover" cachePolicy="disk"
+            recyclingKey={e.id} transition={120} />
         ) : (
           <Fish size={28} color={colors.textMuted} />
         )}
@@ -153,11 +214,12 @@ function DexCard({ entry: e, units }: { entry: DexEntry; units: ReturnType<typeo
 }
 
 const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   bar: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 3 },
   search: {
-    flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.surface, borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.borderStrong, paddingHorizontal: space.md, minHeight: 48,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.surface, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.borderStrong, paddingHorizontal: space.md, minHeight: 44,
   },
   searchInput: { ...type.body, flex: 1, paddingVertical: space.sm },
   card: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, gap: 2 },

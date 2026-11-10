@@ -115,3 +115,34 @@ export function useSpeciesLakes(speciesId: string | undefined) {
     ['waterbody_species', 'waterbodies', 'catches'],
   ).data;
 }
+
+/** Regions of the lakes on this phone (e.g. ['BC']), for labelling the lake view. */
+export function useLakeRegions() {
+  const { data } = useLiveQuery<{ region: string }>(
+    'SELECT DISTINCT region FROM waterbodies WHERE region IS NOT NULL ORDER BY region',
+    [],
+    ['waterbodies'],
+  );
+  return useMemo(() => data.map((r) => r.region), [data]);
+}
+
+/** "Near me" radius. */
+export const NEAR_KM = 50;
+
+/**
+ * Species recorded in lakes around a point (a ~50 km box, local data, works offline):
+ * species id → number of those lakes.
+ */
+export function useNearbySpecies(here: { lat: number; lng: number } | null) {
+  const dLat = NEAR_KM / 111.32;
+  const dLng = here ? dLat / Math.cos((here.lat * Math.PI) / 180) : 0;
+  const { data } = useLiveQuery<{ species_id: string; n: number }>(
+    `SELECT ws.species_id, count(DISTINCT ws.waterbody_id) AS n
+     FROM waterbody_species ws JOIN waterbodies w ON w.id = ws.waterbody_id
+     WHERE w.lat BETWEEN ? AND ? AND w.lng BETWEEN ? AND ?
+     GROUP BY ws.species_id`,
+    here ? [here.lat - dLat, here.lat + dLat, here.lng - dLng, here.lng + dLng] : [1, 0, 1, 0],
+    ['waterbody_species', 'waterbodies'],
+  );
+  return useMemo(() => new Map(data.map((r) => [r.species_id, r.n])), [data]);
+}

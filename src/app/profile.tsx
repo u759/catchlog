@@ -168,7 +168,7 @@ export default function Profile() {
           </View>
 
           {friends.length === 0 ? (
-            <Text style={type.secondary}>No friends yet. Share your code with your fishing buddies.</Text>
+            <Text style={type.secondary}>No friends yet. Share your code to add one.</Text>
           ) : (
             <Group>
               {friends.map((f) => (

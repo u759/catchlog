@@ -216,7 +216,7 @@ Gently rounded and consistent: 12px for buttons, inputs and segmented controls; 
 - **State:** selected chips fill Forest with white label. Chips filter or pick; for 2–3 mutually exclusive settings use the segmented control.
 
 ### Segmented control
-Sunken track, 40px tall, 12px corners; the selected segment is a Surface pill with an Ink label (600, 15px), unselected labels Ink muted. Labels shrink to fit at large text sizes. Used for the Logbook filter, Dex scope, Units, leaderboard period and catch visibility.
+Sunken track, 40px tall, 12px corners; the selected segment is a Surface pill with an Ink label (600, 15px), unselected labels Ink muted. Labels shrink to fit at large text sizes. Used for the Logbook filter, Dex scope, Units, leaderboard period, catch visibility, the map's date range and Map / Satellite.
 
 ### Lists and groups
 Surface group, 16px corners, rows ≥ 48px with a Body label, Secondary subtitle, and right-aligned value or chevron; hairline dividers inset 16px. Used for settings, catch facts, lake facts, data sources, saved areas.
@@ -235,6 +235,18 @@ Lime pill with Deep Moss caption text (600): "Personal best", "Caught 3×", a De
 
 ### Facts line
 Several values as one Secondary line joined by " · " ("0.91 kg · 11.2 cm · Lake tahoe · Yesterday"). Replaces stat tiles.
+
+### Sheet
+A bottom sheet for a small, self-contained choice: Paper background, 20px top corners, Headline title with a close button, content in Segmented controls and Groups. The dimmed backdrop fades in place; only the panel slides up (280ms ease-out in, 200ms ease-in out). With Reduce Motion the panel fades instead. Used for map layers.
+
+### Dropdown
+A filter choice that stays in context: the button shows the current value with a chevron (Forest fill when a filter is active); the menu opens directly under it as a Surface card with 48px rows and a check on the selected row, fading and settling in 160ms. No backdrop dimming; tapping outside closes it. Used for the map's species filter.
+
+### Tip
+A one-time hint on Surface with a hairline edge: Secondary text and a Forest "Got it". Dismissed tips stay dismissed on the phone. One tip per screen at most.
+
+### Map controls
+Map floats sit over imagery with the Map float shadow. Top: one Surface panel holding the date-range Segmented control and the species Dropdown. Bottom-left: the Forest "Save area" pill. Bottom-right: Layers (opens the Map sheet: Map / Satellite, Saved areas, Save an area) above Locate. Everything stays clear of the map attribution in the bottom corners. Lakes we have data for get a faint Forest outline (the 300 biggest lakes in view at any zoom; zooming in reveals smaller ones) (white on satellite) and a 5% tint so they read as tappable; one tap opens the lake. Taps resolve in order: catch pins, saved spots, then the smallest lake under the finger. Long-press still saves a spot.
 
 ### Empty states
 Icon in a Sunken circle, Headline title, Secondary explanation, then one action.
@@ -255,3 +267,4 @@ Icon in a Sunken circle, Headline title, Secondary explanation, then one action.
 - **Don't** use lime for buttons, disabled states or ordinary panels.
 - **Don't** show a stat that is zero just to fill a tile ("Your catches 0").
 - **Don't** use web patterns: breadcrumbs, underlined links, hover hints.
+- **Don't** write filler copy. Say what something does or what happened, in plain words, once.

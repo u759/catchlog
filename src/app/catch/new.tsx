@@ -27,7 +27,7 @@ import { type CatchView, parseTs } from '@/features/catches/model';
 import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { useGearList } from '@/features/gear/hooks';
 import { isLure } from '@/features/gear/taxonomy';
-import { detectWaterbody, speciesInWaterbody, type Waterbody } from '@/features/waterbodies/hooks';
+import { detectWaterbody, speciesInWaterbody, useWaterbody, type Waterbody } from '@/features/waterbodies/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
 import {
@@ -52,10 +52,14 @@ import {
 type Picked = { uri: string; width: number; height: number };
 type Visibility = 'private' | 'friends' | 'public';
 
-/** /catch/new = log a catch; /catch/new?id=… = edit that catch. */
+/** /catch/new = log a catch; /catch/new?id=… = edit that catch; /catch/new?lake=… = log a catch at that lake. */
 export default function CatchFormScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, lake: lakeId } = useLocalSearchParams<{ id?: string; lake?: string }>();
   const { data: existing, isLoading } = useCatch(id);
+  const presetLake = useWaterbody(id ? undefined : lakeId);
+  if (!id && lakeId && !presetLake) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
   if (id && !existing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center' }}>
@@ -67,10 +71,11 @@ export default function CatchFormScreen() {
       </View>
     );
   }
-  return <CatchForm existing={id ? existing : undefined} />;
+  return <CatchForm existing={id ? existing : undefined} presetLake={id ? null : presetLake} />;
 }
 
-function CatchForm({ existing }: { existing?: CatchView | null }) {
+function CatchForm({ existing, presetLake }: { existing?: CatchView | null; presetLake: Waterbody | null }) {
+  const lakeId = presetLake?.id;
   const isEdit = !!existing;
   const insets = useSafeAreaInsets();
   const userId = useUserId();
@@ -86,12 +91,17 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
     existing?.weight_g && !existing.weight_estimated ? formatWeight(existing.weight_g, units) : '',
   );
   const [caughtAt, setCaughtAt] = useState(() => (existing ? parseTs(existing.caught_at) : new Date()));
+  // Logging from a lake page: the catch is at that lake (its centre), not wherever the phone is now.
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    existing?.lat != null && existing.lng != null ? { lat: existing.lat, lng: existing.lng } : null,
+    existing?.lat != null && existing.lng != null
+      ? { lat: existing.lat, lng: existing.lng }
+      : presetLake
+        ? { lat: presetLake.lat, lng: presetLake.lng }
+        : null,
   );
   const [placeName, setPlaceName] = useState<string | null>(existing?.place_name ?? null);
-  const [locating, setLocating] = useState(!isEdit);
-  const [waterbody, setWaterbody] = useState(existing?.waterbody ?? '');
+  const [locating, setLocating] = useState(!isEdit && !lakeId);
+  const [waterbody, setWaterbody] = useState(existing?.waterbody ?? presetLake?.name ?? '');
   const [weather, setWeather] = useState<Weather | null>(isWeather(existing?.weather) ? existing.weather : null);
   const [lure, setLure] = useState(existing?.lure ?? '');
   const [line, setLine] = useState(existing?.line_lb != null ? String(existing.line_lb) : '');
@@ -99,9 +109,9 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
   const [released, setReleased] = useState(existing?.released ?? true);
   const [visibility, setVisibility] = useState<Visibility>((existing?.visibility as Visibility) ?? 'friends');
   const [saving, setSaving] = useState(false);
-  const [regions, setRegions] = useState<string[]>([]); // province codes, for species suggestions
+  const [regions, setRegions] = useState<string[]>(presetLake?.region ? [presetLake.region] : []); // for species suggestions
   const [gearId, setGearId] = useState<string | null>(existing?.gear_id ?? null);
-  const [lake, setLake] = useState<Waterbody | null>(null);
+  const [lake, setLake] = useState<Waterbody | null>(presetLake);
   const [lakeSpecies, setLakeSpecies] = useState<Set<string>>(new Set());
   const { data: gear } = useGearList();
   // Your catch count per species, so your usual fish are suggested first.
@@ -113,10 +123,21 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
   const mySpecies = useMemo(() => new Map(myCounts.map((r) => [r.species_id, r.n])), [myCounts]);
   const lures = useMemo(() => gear.filter((g) => isLure(g.category)).slice(0, 10), [gear]);
 
+  // Preset lake (from a lake page): load its species and the weather there.
+  useEffect(() => {
+    if (!presetLake) return;
+    let cancelled = false;
+    speciesInWaterbody(presetLake.id).then((s) => !cancelled && setLakeSpecies(s)).catch(() => {});
+    fetchCurrentWeather(presetLake.lat, presetLake.lng).then((w) => !cancelled && w && setWeather(w)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [presetLake]);
+
   // Lake at the catch location (local, works offline). Pre-fills the waterbody name and boosts
   // species recorded in that lake in the suggestions.
   useEffect(() => {
-    if (!coords) return;
+    if (!coords || lakeId) return;
     let cancelled = false;
     detectWaterbody(coords.lat, coords.lng)
       .then(async (w) => {
@@ -130,11 +151,11 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
     return () => {
       cancelled = true;
     };
-  }, [coords]);
+  }, [coords, lakeId]);
 
   // New catch: grab GPS (works offline), then best-effort place name + weather (need signal).
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit || lakeId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -162,7 +183,7 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
     return () => {
       cancelled = true;
     };
-  }, [isEdit]);
+  }, [isEdit, lakeId]);
 
   const selectedSpecies = speciesId ? speciesIndex.byId.get(speciesId) : undefined;
   const suggestions = useMemo(() => {
@@ -241,7 +262,7 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
       router.back();
     } catch (e) {
       setSaving(false);
-      Alert.alert('Couldn’t save this catch', 'Nothing was lost; your entries are still here. Please try again.');
+      Alert.alert('Couldn’t save', 'Your entries are still here. Try again.');
       console.warn('saveCatch failed', e);
     }
   }
@@ -271,7 +292,7 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
         <View style={{ gap: space.sm }}>
           <Field
             label="Species"
-            placeholder="Start typing, e.g. Rainbow Trout"
+            placeholder="Type a fish name"
             value={speciesText}
             onChangeText={(t) => {
               setSpeciesText(t);
@@ -319,7 +340,7 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
         )}
         {estimateG != null && !weight && (
           <Text style={type.secondary}>
-            No scale? We’ll save ≈{formatWeight(estimateG, units)} {weightUnit(units)}, estimated from length for this species.
+            No scale? We’ll save ≈{formatWeight(estimateG, units)} {weightUnit(units)}, estimated from the length.
           </Text>
         )}
 
@@ -354,12 +375,17 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
           <Group>
             <Row
               label="Location"
-              value={locating ? 'Finding…' : (placeName ?? (coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : 'Not available'))}
+              value={
+                presetLake
+                  ? (presetLake.name ?? 'Selected lake')
+                  : locating
+                    ? 'Finding…'
+                    : (placeName ?? (coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : 'Not available'))
+              }
             />
             {weather ? (
               <Row
                 label="Weather"
-                sub="Added automatically"
                 value={`${formatTemp(weather.temp_c, units)}, ${weatherLabel(weather.weather_code)} · ${formatWind(weather.wind_kph, weather.wind_dir_deg, units)}`}
               />
             ) : null}
@@ -398,7 +424,7 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
           </View>
         )}
 
-        <Field label="Notes" placeholder="How'd it go down?" value={notes} onChangeText={setNotes} multiline style={{ ...type.body, minHeight: 88, textAlignVertical: 'top', paddingVertical: space.md }} />
+        <Field label="Notes" placeholder="Bait, depth, what worked…" value={notes} onChangeText={setNotes} multiline style={{ ...type.body, minHeight: 88, textAlignVertical: 'top', paddingVertical: space.md }} />
 
         {/* Options */}
         <Group>

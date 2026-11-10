@@ -47,9 +47,11 @@ export default function Logbook() {
   const [filter, setFilter] = useState<LogbookFilter>('all');
   const [limit, setLimit] = useState(PAGE);
   // All reads are local SQLite (works offline). The list pages in PAGE rows at a time.
-  const { catches, isLoading } = useLogbook(filter, limit);
+  const { catches: rows, isLoading } = useLogbook(filter, limit);
   const stats = useLogbookStats();
   const best = useBestCatch();
+  // With a single catch, the personal-best card already shows it; don't repeat it as a "Recent" row.
+  const catches = filter === 'all' && best && rows.length === 1 && rows[0].id === best.id ? [] : rows;
   const sync = usePendingUploads();
 
   const changeFilter = (f: LogbookFilter) => {
@@ -75,7 +77,7 @@ export default function Logbook() {
           <Text style={[type.secondary, { flex: 1, color: colors.text }]}>
             {sync.connected
               ? `Uploading ${sync.count} change${sync.count > 1 ? 's' : ''}…`
-              : `${sync.count} change${sync.count > 1 ? 's' : ''} saved on this phone. They upload when you have signal.`}
+              : `${sync.count} change${sync.count > 1 ? 's' : ''} saved. ${sync.count > 1 ? 'They' : 'It'}’ll upload when you have signal.`}
           </Text>
         </View>
       )}
@@ -112,6 +114,10 @@ export default function Logbook() {
         onEndReached={() => {
           if (filter !== 'trophies' && catches.length >= limit) setLimit((l) => l + PAGE);
         }}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={9}
+        removeClippedSubviews
         ListEmptyComponent={
           isLoading || (!sync.hasSynced && sync.connected) ? (
             <View style={{ padding: space.xl, alignItems: 'center', gap: space.sm }}>
@@ -122,16 +128,16 @@ export default function Logbook() {
             <EmptyState
               icon={CloudOff}
               title="Waiting for a connection"
-              body="Connect once to download your logbook. You can log new catches now; they upload later."
+              body="Connect once to download your logbook. You can still log catches now."
             />
           ) : stats.total === 0 ? (
             <EmptyState
               icon={Fish}
               title="No catches yet"
-              body="Log your first fish with the camera button below. It works without signal and uploads later."
+              body="Tap the camera to log your first fish. It works without signal."
               action={<Button label="Log a catch" onPress={() => router.push('/catch/new')} style={{ alignSelf: 'stretch' }} />}
             />
-          ) : (
+          ) : filter === 'all' && best ? undefined : (
             <Text style={[type.secondary, { textAlign: 'center', padding: space.xl }]}>
               {filter === 'today' ? 'No catches today yet.' : 'Nothing here yet.'}
             </Text>
