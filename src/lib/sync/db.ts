@@ -114,6 +114,12 @@ const MIGRATIONS: string[] = [
   ALTER TABLE species ADD COLUMN family_common TEXT;
   DELETE FROM sync_state WHERE key LIKE 'ref:species:%';
   `,
+  // v4: data sources (credits screen).
+  `
+  CREATE TABLE data_sources (
+    key TEXT PRIMARY KEY NOT NULL, name TEXT, used_for TEXT, licence TEXT, attribution TEXT, url TEXT, updated_at TEXT
+  );
+  `,
 ];
 
 let ready: Promise<void> | null = null;
@@ -187,7 +193,7 @@ export async function wipeLocalData() {
   await initDb();
   await transaction(async (tx) => {
     for (const t of ['catches', 'profiles', 'friendships', 'species', 'species_profiles', 'waterbodies',
-      'waterbody_species', 'gear', 'spots', 'outbox', 'photo_queue', 'sync_state']) {
+      'waterbody_species', 'data_sources', 'gear', 'spots', 'outbox', 'photo_queue', 'sync_state']) {
       await tx.runAsync(`DELETE FROM ${t} WHERE 1`);
     }
   });

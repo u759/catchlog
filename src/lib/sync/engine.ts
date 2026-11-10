@@ -6,6 +6,7 @@ import type { SQLiteBindValue } from 'expo-sqlite';
 import { supabase } from '@/lib/supabase';
 
 import { db, getState, initDb, setState, transaction, type Tx, wipeLocalData, write } from './db';
+import { prefetchSpeciesImages } from './images';
 import { deleteAllLocalPhotos, deleteLocalPhoto, localPhotoFile, processPhotoQueue, queuePhoto } from './photos';
 
 /*
@@ -278,7 +279,7 @@ async function pullFriendships(userId: string) {
  *    (dropping local rows the server no longer has); else fetch only rows updated after our cursor.
  */
 type RefTable = {
-  table: 'species' | 'species_profiles' | 'waterbodies' | 'waterbody_species';
+  table: 'species' | 'species_profiles' | 'waterbodies' | 'waterbody_species' | 'data_sources';
   select: string;
   order: string[]; // stable keyset: updated_at + primary key column(s)
   pk: string[];
@@ -380,6 +381,14 @@ const REFERENCE: RefTable[] = [
     toLocal: (r) => [r.waterbody_id, r.species_id, r.source, r.observations, r.first_observed, r.last_observed,
       r.updated_at] as SQLiteBindValue[],
   },
+  {
+    table: 'data_sources',
+    select: 'key, name, used_for, licence, attribution, url, updated_at',
+    order: ['updated_at', 'key'],
+    pk: ['key'],
+    columns: ['key', 'name', 'used_for', 'licence', 'attribution', 'url', 'updated_at'],
+    toLocal: (r) => [r.key, r.name, r.used_for, r.licence, r.attribution, r.url, r.updated_at] as SQLiteBindValue[],
+  },
 ];
 
 // ── scheduling ──────────────────────────────────────────────────────────────
@@ -402,6 +411,7 @@ async function runOnce() {
     await pullProfile();
     await pullFriendships(userId);
     for (const t of REFERENCE) await pullReference(t);
+    await prefetchSpeciesImages();
     // Drain due photo transfers (failed ones back off and wait for a later run).
     for (let i = 0; i < 20 && status.online; i++) {
       if ((await processPhotoQueue()) === 0) break;

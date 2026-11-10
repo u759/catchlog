@@ -20,13 +20,14 @@ import { Chip } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { useSpots } from '@/features/spots/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
+import { parseTs } from '@/features/catches/model';
 import { colors, radius, shadow, space } from '@/theme';
 
 // OpenFreeMap: free vector tiles, attribution shown by the map. Offline downloads are limited to
 // 3,000 tiles each by their terms (https://openfreemap.org/tos/).
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 const MAX_PACK_TILES = 3000;
-const BC_CENTER: [number, number] = [-123.1, 49.6];
+const WORLD: [number, number] = [0, 20]; // initial view when the phone has no location yet
 
 type Range = '30d' | '1y' | 'all';
 
@@ -60,8 +61,8 @@ export default function MapTab() {
 
   useEffect(() => {
     Location.getLastKnownPositionAsync()
-      .then((p) => setStart(p ? [p.coords.longitude, p.coords.latitude] : BC_CENTER))
-      .catch(() => setStart(BC_CENTER));
+      .then((p) => setStart(p ? [p.coords.longitude, p.coords.latitude] : WORLD))
+      .catch(() => setStart(WORLD));
   }, []);
 
   const speciesChips = useMemo(() => {
@@ -79,7 +80,7 @@ export default function MapTab() {
     return {
       type: 'FeatureCollection' as const,
       features: catches
-        .filter((c) => (!species || c.species_id === species) && Date.parse(c.caught_at.replace(' ', 'T')) >= cutoff)
+        .filter((c) => (!species || c.species_id === species) && parseTs(c.caught_at).getTime() >= cutoff)
         .map((c) => ({
           type: 'Feature' as const,
           id: c.id,
@@ -166,7 +167,7 @@ export default function MapTab() {
               const [lng, lat] = e.nativeEvent.lngLat;
               router.push({ pathname: '/spot/edit', params: { lat: String(lat), lng: String(lng) } });
             }}>
-            <Camera ref={camera} initialViewState={{ center: start, zoom: start === BC_CENTER ? 5 : 11 }} />
+            <Camera ref={camera} initialViewState={{ center: start, zoom: start === WORLD ? 1 : 11 }} />
             <UserLocation accuracy heading />
             <GeoJSONSource
               id="catches"

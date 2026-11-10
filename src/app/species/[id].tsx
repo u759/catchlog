@@ -15,7 +15,7 @@ import { useSpecies, useSpeciesLakes } from '@/features/collection/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
 import { colors, radius, space, type } from '@/theme';
-import { formatLength, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
+import { depthUnit, formatDepth, formatLength, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const firstSentence = (s: unknown) => (typeof s === 'string' ? (s.match(/^.*?[.!?](\s|$)/)?.[0] ?? s).trim() : null);
@@ -59,7 +59,7 @@ export default function SpeciesScreen() {
   const pbLength = Math.max(...mine.map((c) => c.length_mm ?? 0));
   const pbWeight = Math.max(...mine.map((c) => c.weight_g ?? 0));
   const bestPhoto = mine.map((c) => localPhotoUri(c.photo_path)).find(Boolean);
-  const heroImage = bestPhoto ?? (s.image_url as string | null) ?? (s.image_thumb_url as string | null);
+  const heroImage = bestPhoto ?? (s.image_url as string | null);
   const spawning = (() => {
     try {
       return (JSON.parse(String(s.spawning_months ?? '[]')) as number[]).map((m) => MONTHS[m - 1]).join(', ');
@@ -67,7 +67,7 @@ export default function SpeciesScreen() {
       return '';
     }
   })();
-  const depth = s.depth_min_m != null || s.depth_max_m != null ? `${s.depth_min_m ?? 0}–${s.depth_max_m ?? '?'} m` : null;
+  const depth = s.depth_min_m != null || s.depth_max_m != null ? `${formatDepth((s.depth_min_m as number | null) ?? 0, units)}–${s.depth_max_m != null ? formatDepth(s.depth_max_m as number, units) : '?'} ${depthUnit(units)}` : null;
   const temp = s.temp_pref_min_c != null ? `${Math.round(Number(s.temp_pref_min_c))}–${Math.round(Number(s.temp_pref_max_c))} °C` : null;
 
   return (
@@ -76,7 +76,8 @@ export default function SpeciesScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.hero}>
           {heroImage ? (
-            <Image source={{ uri: heroImage }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+            <Image source={{ uri: heroImage }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk"
+              placeholder={s.image_thumb_url ? { uri: s.image_thumb_url as string } : undefined} placeholderContentFit="cover" />
           ) : (
             <Fish size={56} color={colors.textMuted} />
           )}

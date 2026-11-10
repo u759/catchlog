@@ -8,8 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Field, InfoPill } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { deleteSpot, distanceBearing, saveSpot, type Spot, useSpot } from '@/features/spots/hooks';
+import { useUnits } from '@/features/profile/hooks';
 import { detectWaterbody, type Waterbody } from '@/features/waterbodies/hooks';
 import { colors, space, type } from '@/theme';
+import { depthUnit, formatDepth, formatDistance, parseDepth } from '@/utils/units';
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
@@ -25,8 +27,9 @@ export default function SpotEditScreen() {
 function SpotForm({ existing, point }: { existing: Spot | null; point: { lat: number; lng: number } }) {
   const insets = useSafeAreaInsets();
   const userId = useUserId();
+  const units = useUnits();
   const [name, setName] = useState(existing?.name ?? '');
-  const [depth, setDepth] = useState(existing?.depth_m != null ? String(existing.depth_m) : '');
+  const [depth, setDepth] = useState(existing?.depth_m != null ? formatDepth(existing.depth_m, units) : '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [lake, setLake] = useState<Waterbody | null>(null);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
@@ -48,7 +51,7 @@ function SpotForm({ existing, point }: { existing: Spot | null; point: { lat: nu
         name: name.trim() || (lake?.name ? `${lake.name} spot` : 'Fishing spot'),
         lat: point.lat,
         lng: point.lng,
-        depth_m: depth ? Number.parseFloat(depth) || null : null,
+        depth_m: parseDepth(depth, units),
         notes: notes.trim() || null,
         waterbody_id: lake?.id ?? null,
       },
@@ -78,7 +81,7 @@ function SpotForm({ existing, point }: { existing: Spot | null; point: { lat: nu
           <InfoPill
             icon={Compass}
             label="From your last position"
-            value={`${nav.distance < 1000 ? `${Math.round(nav.distance)} m` : `${(nav.distance / 1000).toFixed(1)} km`} · ${Math.round(nav.bearing)}° ${COMPASS[Math.round(nav.bearing / 45) % 8]}`}
+            value={`${formatDistance(nav.distance, units)} · ${Math.round(nav.bearing)}° ${COMPASS[Math.round(nav.bearing / 45) % 8]}`}
           />
         )}
         {lake && (
@@ -87,7 +90,7 @@ function SpotForm({ existing, point }: { existing: Spot | null; point: { lat: nu
           </Pressable>
         )}
         <Field label="Name" placeholder="e.g. Weed bed drop-off" value={name} onChangeText={setName} />
-        <Field label="Depth" placeholder="6" value={depth} onChangeText={setDepth} keyboardType="decimal-pad" suffix="m" />
+        <Field label="Depth" placeholder="6" value={depth} onChangeText={setDepth} keyboardType="decimal-pad" suffix={depthUnit(units)} />
         <Field label="Notes" placeholder="Structure, what worked, when…" value={notes} onChangeText={setNotes} multiline
           style={{ minHeight: 88, fontSize: 16, color: colors.text, textAlignVertical: 'top', paddingVertical: space.md }} />
         {existing && <Button label="Delete spot" icon={Trash2} variant="ghost" onPress={onDelete} />}

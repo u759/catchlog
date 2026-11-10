@@ -151,7 +151,9 @@ export type Database = {
           region: string | null
           running_since: string | null
           state: Json
+          updated_at: string
           url: string | null
+          used_for: string | null
           version: string | null
         }
         Insert: {
@@ -169,7 +171,9 @@ export type Database = {
           region?: string | null
           running_since?: string | null
           state?: Json
+          updated_at?: string
           url?: string | null
+          used_for?: string | null
           version?: string | null
         }
         Update: {
@@ -187,7 +191,9 @@ export type Database = {
           region?: string | null
           running_since?: string | null
           state?: Json
+          updated_at?: string
           url?: string | null
+          used_for?: string | null
           version?: string | null
         }
         Relationships: []

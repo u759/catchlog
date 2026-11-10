@@ -8,7 +8,9 @@ import { Button, Chip, Field } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { deleteGear, type Gear, saveGear, useGear } from '@/features/gear/hooks';
 import { GEAR_CATEGORIES } from '@/features/gear/taxonomy';
+import { useUnits } from '@/features/profile/hooks';
 import { colors, space, type } from '@/theme';
+import { formatLureWeight, lureWeightUnit, parseLureWeight } from '@/utils/units';
 
 /** /gear/edit = add; /gear/edit?id=… = edit. */
 export default function GearEditScreen() {
@@ -21,13 +23,14 @@ export default function GearEditScreen() {
 function GearForm({ existing }: { existing: Gear | null }) {
   const insets = useSafeAreaInsets();
   const userId = useUserId();
+  const units = useUnits();
   const [category, setCategory] = useState(existing?.category ?? 'soft-plastic');
   const [subtype, setSubtype] = useState<string | null>(existing?.subtype ?? null);
   const [name, setName] = useState(existing?.name ?? '');
   const [brand, setBrand] = useState(existing?.brand ?? '');
   const [color, setColor] = useState(existing?.color ?? '');
   const [size, setSize] = useState(existing?.size ?? '');
-  const [weight, setWeight] = useState(existing?.weight_g != null ? String(existing.weight_g) : '');
+  const [weight, setWeight] = useState(formatLureWeight(existing?.weight_g, units));
   const [hook, setHook] = useState(existing?.hook_size ?? '');
   const [quantity, setQuantity] = useState(existing?.quantity != null ? String(existing.quantity) : '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
@@ -45,7 +48,7 @@ function GearForm({ existing }: { existing: Gear | null }) {
         brand: brand.trim() || null,
         color: color.trim() || null,
         size: size.trim() || null,
-        weight_g: weight ? Number.parseFloat(weight) || null : null,
+        weight_g: parseLureWeight(weight, units),
         hook_size: hook.trim() || null,
         quantity: quantity ? Number.parseInt(quantity, 10) || null : null,
         notes: notes.trim() || null,
@@ -100,7 +103,7 @@ function GearForm({ existing }: { existing: Gear | null }) {
         </View>
         <View style={styles.row}>
           <Field label="Size" placeholder='5"' value={size} onChangeText={setSize} />
-          <Field label="Weight" placeholder="7" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" suffix="g" />
+          <Field label="Weight" placeholder="7" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" suffix={lureWeightUnit(units)} />
         </View>
         <View style={styles.row}>
           <Field label="Hook size" placeholder="3/0" value={hook} onChangeText={setHook} />

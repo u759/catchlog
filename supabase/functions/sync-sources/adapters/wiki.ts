@@ -31,12 +31,12 @@ async function wikidata(fbIds: number[]): Promise<Map<number, Wd>> {
 
 type Img = { url: string; thumb: string; page: string; author: string | null; license: string | null };
 
-async function commons(files: string[]): Promise<Map<string, Img>> {
+async function commons(files: string[], width: number): Promise<Map<string, Img>> {
   const out = new Map<string, Img>();
   for (let i = 0; i < files.length; i += 50) {
     const q = new URLSearchParams({
       action: 'query', format: 'json', formatversion: '2', prop: 'imageinfo', iiprop: 'url|extmetadata',
-      iiurlwidth: '480', titles: files.slice(i, i + 50).map((f) => `File:${f}`).join('|'),
+      iiurlwidth: String(width), titles: files.slice(i, i + 50).map((f) => `File:${f}`).join('|'),
     });
     type Res = { query: { normalized?: { from: string; to: string }[]; pages: { title: string; imageinfo?: {
       url: string; thumburl?: string; descriptionurl: string; extmetadata?: Record<string, { value: string }> }[] }[] } };
@@ -98,16 +98,20 @@ export const wikiSpecies: Adapter = {
     if (!species.length) return { state: {}, done: true, rows: prev };
 
     const wd = new Map(species.flatMap((s) => (wdAll[s.fishbase_id] ? [[s.fishbase_id, wdAll[s.fishbase_id]] as const] : [])));
-    const imgs = await commons([...new Set([...wd.values()].flatMap((e) => (e.img ? [e.img] : [])))]);
+    // Standard Wikimedia thumbnail widths: 500 px for cards, 960 px for the species page (never the original).
+    const files = [...new Set([...wd.values()].flatMap((e) => (e.img ? [e.img] : [])))];
+    const imgs = await commons(files, 500);
+    const large = await commons(files, 960);
     const wiki = await wikipedia([...new Set([...wd.values()].flatMap((e) => (e.en ? [e.en] : [])))]);
 
     const rows = species.map((s) => {
       const e = wd.get(s.fishbase_id);
       const img = e?.img ? imgs.get(e.img) : undefined;
+      const big = e?.img ? large.get(e.img) : undefined;
       const w = e?.en ? wiki.get(e.en) : undefined;
       return {
         species_id: s.id, wikidata_id: e?.item ?? null, summary: w?.summary ?? null, summary_url: w?.url ?? null,
-        image_url: img?.url ?? null, image_thumb_url: img?.thumb ?? null, image_author: img?.author ?? null,
+        image_url: big?.thumb ?? null, image_thumb_url: img?.thumb ?? null, image_author: img?.author ?? null,
         image_license: img?.license ?? null, image_page_url: img?.page ?? null,
       };
     });

@@ -12,33 +12,13 @@ import { useUnits } from '@/features/profile/hooks';
 import { colors, radius, shadow, space, type } from '@/theme';
 import { formatLength, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
 
-type Scope = 'bc' | 'canada' | 'game' | 'caught';
-const SCOPES: { key: Scope; label: string }[] = [
-  { key: 'bc', label: 'BC' },
-  { key: 'game', label: 'Game fish' },
-  { key: 'canada', label: 'All Canada' },
-  { key: 'caught', label: 'Caught' },
-];
-
-const inBC = (e: DexEntry) => e.regions.includes('BC') || e.regions.includes('PAC');
-
 export default function Dex() {
   const { entries } = useDex();
   const units = useUnits();
-  const [scope, setScope] = useState<Scope>('bc');
   const [group, setGroup] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  const inScope = useMemo(
-    () =>
-      entries.filter((e) => {
-        if (scope === 'bc') return inBC(e);
-        if (scope === 'game') return e.game_fish && (inBC(e) || e.caught > 0);
-        if (scope === 'caught') return e.caught > 0;
-        return e.in_canada;
-      }),
-    [entries, scope],
-  );
+  const inScope = entries;
   const caughtCount = inScope.filter((e) => e.caught > 0).length;
   // Groups are FishBase families (by their common name), most species first.
   const groupsPresent = useMemo(() => {
@@ -89,11 +69,6 @@ export default function Dex() {
                 onChangeText={setQuery}
                 autoCorrect={false}
               />
-            </View>
-            <View style={styles.chips}>
-              {SCOPES.map((s) => (
-                <Chip key={s.key} label={s.label} selected={scope === s.key} onPress={() => { setScope(s.key); setGroup(null); }} />
-              ))}
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
               <Chip label="All groups" selected={!group} onPress={() => setGroup(null)} />
@@ -168,7 +143,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, paddingHorizontal: space.md, height: 44,
   },
   searchInput: { flex: 1, fontSize: 15, color: colors.text },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   card: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, gap: 4, ...shadow },
   cardMystery: { backgroundColor: colors.surfaceAlt, shadowOpacity: 0, elevation: 0, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

@@ -8,15 +8,18 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { AppHeader } from '@/components/AppHeader';
 import { EmptyState, Section, StatTile } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
+import { useUnits } from '@/features/profile/hooks';
 import { isDepthMapSaved, openDepthMap, useWaterbody, useWaterbodySpecies } from '@/features/waterbodies/hooks';
 import { useLiveQuery } from '@/lib/sync/db';
 import { colors, radius, space, type } from '@/theme';
+import { depthUnit, formatDepth } from '@/utils/units';
 
 export default function LakeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const lake = useWaterbody(id);
   const species = useWaterbodySpecies(id);
   const userId = useUserId() ?? '';
+  const units = useUnits();
   const { data: mine } = useLiveQuery<{ n: number }>(
     'SELECT count(*) AS n FROM catches WHERE user_id = ? AND waterbody_id = ?',
     [userId, id ?? ''],
@@ -50,7 +53,7 @@ export default function LakeScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.stats}>
           <StatTile label="Area" value={lake.area_ha != null ? lake.area_ha.toFixed(lake.area_ha < 10 ? 1 : 0) : '—'} unit="ha" />
-          <StatTile label="Max depth" value={lake.max_depth_m != null ? String(Math.round(lake.max_depth_m)) : '—'} unit="m" />
+          <StatTile label="Max depth" value={formatDepth(lake.max_depth_m, units)} unit={depthUnit(units)} />
           <StatTile label="Your catches" value={String(mine[0]?.n ?? 0)} />
         </View>
 
@@ -72,7 +75,7 @@ export default function LakeScreen() {
               </Pressable>
             ))
           )}
-          {lake.mean_depth_m != null && <Text style={type.muted}>Mean depth {Math.round(lake.mean_depth_m)} m.</Text>}
+          {lake.mean_depth_m != null && <Text style={type.muted}>Mean depth {formatDepth(lake.mean_depth_m, units)} {depthUnit(units)}.</Text>}
           <Text style={type.muted}>Saved maps open offline. Not for navigation. Open Government Licence – BC.</Text>
         </Section>
 

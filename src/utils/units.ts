@@ -43,3 +43,39 @@ export function estimateWeightG(
   if (!lengthMm || species?.lw_a == null || species?.lw_b == null) return null;
   return Math.round(10 ** (species.lw_a + species.lw_b * Math.log10(lengthMm)));
 }
+
+const M_PER_FT = 0.3048;
+const G_PER_OZ = 28.349523125;
+
+// Water depth (stored in metres).
+export const depthUnit = (u: Units) => (u === 'imperial' ? 'ft' : 'm');
+export function formatDepth(m: number | null | undefined, u: Units): string {
+  if (m == null) return '—';
+  return String(Math.round(u === 'imperial' ? m / M_PER_FT : m));
+}
+export function parseDepth(text: string, u: Units): number | null {
+  const n = Number.parseFloat(text.replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round((u === 'imperial' ? n * M_PER_FT : n) * 10) / 10;
+}
+
+// Lure / tackle weight (stored in grams).
+export const lureWeightUnit = (u: Units) => (u === 'imperial' ? 'oz' : 'g');
+export function formatLureWeight(g: number | null | undefined, u: Units): string {
+  if (g == null) return '';
+  return u === 'imperial' ? String(Math.round((g / G_PER_OZ) * 100) / 100) : String(Math.round(g * 10) / 10);
+}
+export function parseLureWeight(text: string, u: Units): number | null {
+  const n = Number.parseFloat(text.replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round((u === 'imperial' ? n * G_PER_OZ : n) * 10) / 10;
+}
+
+/** Distance (metres) for display: m/km or ft/mi. */
+export function formatDistance(m: number, u: Units): string {
+  if (u === 'imperial') {
+    const ft = m / M_PER_FT;
+    return ft < 1000 ? `${Math.round(ft)} ft` : `${(m / 1609.344).toFixed(1)} mi`;
+  }
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
