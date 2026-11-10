@@ -8,6 +8,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { AppHeader } from '@/components/AppHeader';
 import { Badge, Dropdown, EmptyState, SearchField } from '@/components/ui';
 import { localPhotoUri } from '@/features/catches/photos';
+import { matchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { environmentLabel } from '@/features/collection/fishbaseLabels';
 import { usePendingUploads } from '@/features/catches/hooks';
 import { type DexEntry, NEAR_KM, useDex, useLakeRegions, useNearbySpecies } from '@/features/collection/hooks';
@@ -52,6 +53,7 @@ export default function Dex() {
   const waitingForData = !sync.hasSynced && sync.connected && lakeCount === 0;
   const [group, setGroup] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const speciesIndex = useSpeciesIndex();
 
   // Near me / lakes views put your fish first, then the most widespread (where you're most likely to meet them);
   // "All" stays in Dex-number order.
@@ -76,13 +78,15 @@ export default function Dex() {
   }, [inScope]);
 
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return inScope.filter(
-      (e) =>
-        (!group || e.family_common === group) &&
-        (!q || e.common_name.toLowerCase().includes(q) || String(e.dex_no) === q.replace(/^#|^no\.?\s*/i, '')),
-    );
-  }, [inScope, group, query]);
+    const inGroup = inScope.filter((e) => !group || e.family_common === group);
+    const q = query.trim();
+    if (!q) return inGroup;
+    // A Dex number ("12", "#12", "No. 12"), otherwise the shared fuzzy species match, best match first.
+    const no = q.replace(/^#|^no\.?\s*/i, '');
+    if (/^\d+$/.test(no)) return inGroup.filter((e) => String(e.dex_no) === String(Number(no)));
+    const rank = new Map(matchSpecies(speciesIndex, q, 200).map((id, i) => [id, i]));
+    return inGroup.filter((e) => rank.has(e.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+  }, [inScope, group, query, speciesIndex]);
 
   const progress = inScope.length ? caughtCount / inScope.length : 0;
 

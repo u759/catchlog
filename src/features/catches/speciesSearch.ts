@@ -87,6 +87,15 @@ export function useSpeciesIndex() {
 }
 
 /**
+ * The app's one fuzzy species match (typos, French and scientific names, accents): species ids for `query`,
+ * best first. Used by the species picker, the Dex search and the Logbook search.
+ */
+export function matchSpecies(index: ReturnType<typeof useSpeciesIndex>, query: string, limit = 60): string[] {
+  const q = query.trim();
+  return q ? index.fuse.search(q, { limit }).map((r) => r.item.id) : [];
+}
+
+/**
  * Picker suggestions. Typed text: fuzzy match, nudged toward game fish and your province.
  * Empty: game fish found in your province first.
  */

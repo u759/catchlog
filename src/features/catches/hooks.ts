@@ -8,6 +8,7 @@ import { syncNow, useSyncStatus, writeLocal } from '@/lib/sync/engine';
 import { adoptPhoto, deleteLocalPhoto, photoPathFor } from '@/lib/sync/photos';
 
 import { fetchRemoteCatch } from './api';
+import { matchSpecies, useSpeciesIndex } from './speciesSearch';
 import { type CatchPhotoRef, type CatchView, fromLocal, LOCAL_CATCH_SELECT, type LocalCatchRow, photoIdFromPath } from './model';
 
 export function useUserId() {
@@ -22,15 +23,17 @@ const startOfToday = () => {
   return d.toISOString();
 };
 
-/** Every word must appear in the species name, lake, place, lure or notes (case-insensitive). */
-const SEARCH_FIELDS = ['s.common_name', 's.common_name_fr', 'c.species_other', 'c.waterbody', 'c.place_name', 'c.lure', 'c.notes'];
-function searchWhere(search: string): [string, string[]] {
+/**
+ * A catch matches if its species is a fuzzy match for the whole query (the shared `matchSpecies`: typos, French
+ * and scientific names), or every word appears in the typed species, lake, place, lure or notes.
+ */
+const TEXT_FIELDS = ['s.common_name', 'c.species_other', 'c.waterbody', 'c.place_name', 'c.lure', 'c.notes'];
+function searchWhere(search: string, speciesIds: string[]): [string, string[]] {
   const words = search.trim().split(/\s+/).filter(Boolean).slice(0, 5);
   const like = (w: string) => `%${w.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
-  return [
-    words.map(() => `(${SEARCH_FIELDS.map((f) => `${f} LIKE ? ESCAPE '\\'`).join(' OR ')})`).join(' AND '),
-    words.flatMap((w) => SEARCH_FIELDS.map(() => like(w))),
-  ];
+  const text = words.map(() => `(${TEXT_FIELDS.map((f) => `${f} LIKE ? ESCAPE '\\'`).join(' OR ')})`).join(' AND ');
+  const species = speciesIds.length ? `c.species_id IN (${speciesIds.map(() => '?').join(', ')}) OR ` : '';
+  return [`(${species}(${text}))`, [...speciesIds, ...words.flatMap((w) => TEXT_FIELDS.map(() => like(w)))]];
 }
 
 /**
@@ -39,9 +42,11 @@ function searchWhere(search: string): [string, string[]] {
  */
 export function useLogbook(filter: LogbookFilter, limit: number, search = '') {
   const userId = useUserId() ?? '';
+  const speciesIndex = useSpeciesIndex();
+  const speciesIds = useMemo(() => matchSpecies(speciesIndex, search), [speciesIndex, search]);
   const [sql, params] = useMemo((): [string, unknown[]] => {
     if (search.trim()) {
-      const [where, args] = searchWhere(search);
+      const [where, args] = searchWhere(search, speciesIds);
       return [
         `${LOCAL_CATCH_SELECT} WHERE c.user_id = ? AND ${where} ORDER BY julianday(c.caught_at) DESC LIMIT ?`,
         [userId, ...args, limit],
@@ -63,7 +68,7 @@ export function useLogbook(filter: LogbookFilter, limit: number, search = '') {
       default:
         return [`${LOCAL_CATCH_SELECT} WHERE c.user_id = ? ORDER BY julianday(c.caught_at) DESC LIMIT ?`, [userId, limit]];
     }
-  }, [filter, limit, userId, search]);
+  }, [filter, limit, userId, search, speciesIds]);
   const { data, isLoading } = useLiveQuery<LocalCatchRow>(sql, params as never, ['catches', 'species']);
   return { catches: useMemo(() => data.map(fromLocal), [data]), isLoading };
 }
