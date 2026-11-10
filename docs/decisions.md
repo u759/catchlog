@@ -46,6 +46,14 @@ Edge Function calls Fishial Recognition API v2 (free plan: 100 credits/month, 1 
 **BC sources (all OGL-BC):** FWA lakes (named or ≥ 10 ha, ~16.5k), FISS lake surveys (depths), Bathymetric Maps – Open (PDF links), Known BC Fish Observations (species per lake), BC fish species codes (FIDQ, links observations to species). A source re-runs when a source it depends on refreshes. Stocking data and georeferenced contours are Access Only → not mirrored (link out to GoFishBC).
 **Client:** reference tables sync to the phone with a version check (`reference_version`), so lake lookup, species-per-lake and profiles work offline. Lake assignment: one rule everywhere, the nearest lake within 300 m. The server applies it with exact outlines (trigger on catches/spots, always authoritative); the phone applies it with bounding boxes as an offline guess.
 
+## Download size and scaling past BC (2026-11-10, plan, not built)
+**Today (BC only):** first sync downloads ~12 MB of JSON (~70 pages of 500 rows; gzip on the wire): species 0.6 MB + profiles 2.3 MB (all of Canada) + BC lakes 5.7 MB (16.5k, no outlines) + fish-per-lake 3.2 MB (13.7k), plus ~5 MB of species photos (lake/caught species only). Phone DB ~12 MB. Later app opens only run 5 version checks and pull changed rows.
+**Species scale fine** (count doesn't grow with geography); keep syncing all of them.
+**Lakes don't:** Canada-wide is an estimated 15–30× BC → ~100–250 MB per phone, and lake outlines (BC: 32 MB) would likely fill the free 500 MB database.
+**When adding a second province, do both:**
+1. **Region-scoped lake sync**, like offline map areas: the phone downloads `waterbodies` / `waterbody_species` only for its home province (from location) plus regions the user adds in a "Regions" setting. Filter the pulls by `waterbodies.region`; species and profiles stay all-Canada. `reference_version` becomes per region.
+2. **Keep only useful lakes on the server:** named lakes plus lakes with depth or fish data (BC: 4,884 of 16,457 have data), and simplify outlines further. Keeps the database inside the free tier.
+
 ## Map: MapLibre + OpenFreeMap (2026-11-10)
 `@maplibre/maplibre-react-native` v11 with OpenFreeMap's Liberty style. Offline areas via `OfflineManager.createPack`, capped at 3,000 tiles per download (OpenFreeMap terms). Catch pins clustered from local SQLite; saved spots are a synced, private table.
 
