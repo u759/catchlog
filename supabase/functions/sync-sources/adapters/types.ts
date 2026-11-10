@@ -93,3 +93,13 @@ export function clean(text: unknown, limit?: number): string | null {
   }
   return t;
 }
+
+/**
+ * "FRANÇOIS LAKE" → "François Lake". Capitalises letters after a space, hyphen, slash or bracket only, so accented
+ * and non-Latin letters inside a word (ç, ŝ) don't start a new word.
+ */
+export function titleCase(s: string): string;
+export function titleCase(s: string | null | undefined): string | null;
+export function titleCase(s: string | null | undefined) {
+  return s ? s.toLowerCase().replace(/(^|[\s\-/(])(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase()) : null;
+}

@@ -2,7 +2,7 @@
 // Everything is looked up by the catch's own time (caught_at) and position, never the upload time.
 import { parse as parseCsv } from 'jsr:@std/csv@1';
 
-import { type Adapter, fetchWithRetry, rpc } from './types.ts';
+import { type Adapter, fetchWithRetry, rpc, titleCase } from './types.ts';
 
 const IWLS = 'https://api-iwls.dfo-mpo.gc.ca/api/v1';
 
@@ -36,7 +36,7 @@ export const ecccWaterStations: Adapter = {
       for (const f of page.features) {
         rows.push({
           station_number: f.properties.STATION_NUMBER,
-          name: titleCase(f.properties.STATION_NAME),
+          name: titleCase(f.properties.STATION_NAME).replace(/\bAt\b/g, 'at'),
           lng: f.geometry.coordinates[0],
           lat: f.geometry.coordinates[1],
         });
@@ -48,7 +48,6 @@ export const ecccWaterStations: Adapter = {
   },
 };
 
-const titleCase = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\bAt\b/g, 'at');
 
 type Pending = {
   id: string; caught_at: string; lat: number; lng: number; area_ha: number | null;

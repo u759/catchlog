@@ -67,6 +67,9 @@ Weather is Open-Meteo for the hour of `caught_at` at the catch's coordinates: li
 **Not available:** lake water temperature away from gauges. No open source gives it per lake and day for BC (BC's EMS lake samples are sparse field visits, not a daily series), so the app shows nothing rather than a guess.
 **Water now (lake page):** the latest reading from the lake's gauge, fetched live from Wateroffice (online only, not stored).
 
+## Time zones (2026-11-10)
+Every timestamp is stored and sent to APIs in UTC (Open-Meteo `timezone=GMT`, CHS and Wateroffice in `Z`); the phone shows times in its own zone through the OS time-zone database. No offsets or zone names are hard-coded, so BC's move to permanent UTC−7 (last clock change 2026-03-08; `America/Vancouver` stays at −07:00 from 2026-11-01) needs no app change, only up-to-date OS tz data.
+
 ## Map: MapLibre + OpenFreeMap (2026-11-10)
 `@maplibre/maplibre-react-native` v11 with OpenFreeMap's Liberty style. Catch pins clustered from local SQLite; saved spots are a synced, private table.
 **Saved areas:** "Save area" shows a square frame the user positions; it's sized so every area includes street-level detail (zoom 14) within OpenFreeMap's 3,000-tile cap (~70 × 70 km max). Each area is two packs sharing `metadata.group`: map (zoom 8–16) and satellite (zoom 8–14). Total offline maps capped at 300 MB. Limits live in `src/features/map/offline.ts`; Saved areas screen lists/deletes them.

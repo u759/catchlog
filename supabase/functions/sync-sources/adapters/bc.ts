@@ -2,7 +2,7 @@
 // Waterbodies are keyed across datasets by the BC 1:50K waterbody code ('bc-wsa50k').
 import { parse as parseCsv } from 'jsr:@std/csv@1';
 
-import { type Adapter, fetchWithRetry, rpc } from './types.ts';
+import { type Adapter, fetchWithRetry, rpc, titleCase } from './types.ts';
 
 const WFS = 'https://openmaps.gov.bc.ca/geo/pub/wfs';
 const KEY_50K = 'bc-wsa50k';
@@ -12,8 +12,6 @@ function wfsUrl(params: Record<string, string>) {
   return `${WFS}?${q}`;
 }
 
-const titleCase = (s: string | null | undefined) =>
-  s ? s.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()) : null;
 
 /** Freshwater Atlas lakes: named lakes and all lakes ≥ 10 ha (~16.5k polygons). */
 export const bcLakes: Adapter = {
