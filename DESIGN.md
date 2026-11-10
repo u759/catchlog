@@ -229,7 +229,7 @@ Caption label above, Surface field with Outline edge, 12px corners, 48px tall, B
 **Search field:** the same Surface box, 44px, with a muted magnifier and no caption label; filters the list under it as you type. The Logbook opens it from a round header button (magnifier, X to close); the Dex shows it inline.
 
 ### Navigation
-Bottom tab bar with four sections (Logbook, Dex, Map, Gear) and the camera action in the centre as a Forest circle (44px) without a label. It opens the camera first, then the Log a catch form with the photo (cancelling still opens the form). Active tab: Forest icon and label; inactive: Ink muted. Tab headers put extra actions in round Sunken buttons (`HeaderButton`) beside the leaderboard and profile buttons.
+Bottom tab bar with four sections (Logbook, Dex, Map, Gear) and the camera action in the centre as a Forest circle (44px) without a label. It opens the Log a catch form, which starts with Take photo / Library. Active tab: Forest icon and label; inactive: Ink muted. Tab headers put extra actions in round Sunken buttons (`HeaderButton`) beside the leaderboard and profile buttons.
 
 ### Photos
 A catch's cover photo leads its screen at 4:3 with 16px corners. With several photos it swipes sideways one at a time, with small page dots under it (the current dot stretches into a Forest bar, 160ms). In the form the cover shows large and the others as 64px thumbnails; tapping any photo offers "Make cover photo" or "Remove". Up to 6 per catch.

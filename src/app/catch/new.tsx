@@ -88,12 +88,9 @@ function weatherForSave(
   return Math.abs(Date.now() - caughtAt.getTime()) <= 60 * 60_000 ? weather : null;
 }
 
-/**
- * /catch/new = log a catch; ?id=… = edit that catch; ?lake=… = log a catch at that lake;
- * ?photo=… = start with this (compressed) photo, from the camera-first tab button.
- */
+/** /catch/new = log a catch; ?id=… = edit that catch; ?lake=… = log a catch at that lake. */
 export default function CatchFormScreen() {
-  const { id, lake: lakeId, photo } = useLocalSearchParams<{ id?: string; lake?: string; photo?: string }>();
+  const { id, lake: lakeId } = useLocalSearchParams<{ id?: string; lake?: string }>();
   const { data: existing, isLoading } = useCatch(id);
   const { photos: existingPhotos, isLoading: photosLoading } = useCatchPhotos(id ? existing : null);
   const presetLake = useWaterbody(id ? undefined : lakeId);
@@ -116,7 +113,6 @@ export default function CatchFormScreen() {
       existing={id ? existing : undefined}
       presetLake={id ? null : presetLake}
       initialPhotos={id ? existingPhotos : []}
-      cameraPhoto={id ? undefined : photo}
     />
   );
 }
@@ -125,12 +121,10 @@ function CatchForm({
   existing,
   presetLake,
   initialPhotos,
-  cameraPhoto,
 }: {
   existing?: CatchView | null;
   presetLake: Waterbody | null;
   initialPhotos: CatchPhotoRef[];
-  cameraPhoto?: string;
 }) {
   const lakeId = presetLake?.id;
   const isEdit = !!existing;
@@ -140,9 +134,7 @@ function CatchForm({
   const speciesIndex = useSpeciesIndex();
 
   // Initial values come from the catch being edited (if any), read once at mount.
-  const [photos, setPhotos] = useState<FormPhoto[]>(() =>
-    cameraPhoto ? [{ id: Crypto.randomUUID(), uri: cameraPhoto }] : initialPhotos.map((p) => ({ id: p.id, path: p.path })),
-  );
+  const [photos, setPhotos] = useState<FormPhoto[]>(() => initialPhotos.map((p) => ({ id: p.id, path: p.path })));
   const [adding, setAdding] = useState(false);
   const [idResult, setIdResult] = useState<ShownId | null>(null);
   const [idError, setIdError] = useState<string | null>(null);

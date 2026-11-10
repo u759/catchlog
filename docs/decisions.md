@@ -80,7 +80,7 @@ Every timestamp is stored and sent to APIs in UTC (Open-Meteo `timezone=GMT`, CH
 BC Lake Bathymetric Maps (26 lakes, ~2.3 MB of contour polygons) are **Access Only**, so they aren't copied to our server: the phone downloads them straight from the BC WFS into a file (refreshed monthly) and the map draws them from zoom 11. The server stores only which lakes have them (`waterbodies.has_contours`, `bc-lake-contours` adapter, linked by BC's published WSA lake identifier like the other BC sources). Captioned "Not for navigation".
 
 ## Several photos per catch (2026-11-10)
-`catch_photos` (device-generated ids, file `{user_id}/{id}.jpg`, `position`, soft deletes) holds up to 6 photos; `catches.photo_path` stays the cover (first photo) so the leaderboard, Logbook rows and friends' lists need no join. Photos are compressed when picked, so "Identify" and the upload send the same bytes. Camera first: the camera tab opens the camera, then the form; cancelling still opens the form.
+`catch_photos` (device-generated ids, file `{user_id}/{id}.jpg`, `position`, soft deletes) holds up to 6 photos; `catches.photo_path` stays the cover (first photo) so the leaderboard, Logbook rows and friends' lists need no join. Photos are compressed when picked, so "Identify" and the upload send the same bytes. The camera tab opens the form (Take photo / Library), not the camera directly (user decision 2026-11-10).
 
 ## Photos compressed on device (2026-11-10)
 ≤ 1440 px, JPEG 72% (~150–250 KB) before upload; bucket rejects files > 5 MB. Keeps the 1 GB free storage good for several thousand catches.

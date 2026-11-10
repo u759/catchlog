@@ -22,7 +22,7 @@ Offline-first catch log backed by real public data rather than user-generated gu
 
 ## Operating Context
 
-- Logging: camera first → species (fuzzy search, lake species boosted, optional photo ID by Fishial.ai) → length/weight (weight estimated from FishBase length–weight formulas) → lure from the tackle box → save. Up to 6 photos per catch. Weather, moon/sun/solunar and the lake are attached automatically; tide, water temperature/level/flow and sea temperature are added by the server for the catch's own time and place.
+- Logging: photo (camera or library) → species (fuzzy search, lake species boosted, optional photo ID by Fishial.ai) → length/weight (weight estimated from FishBase length–weight formulas) → lure from the tackle box → save. Up to 6 photos per catch. Weather, moon/sun/solunar and the lake are attached automatically; tide, water temperature/level/flow and sea temperature are added by the server for the catch's own time and place.
 - Offline: catches, photos, gear, spots, species, lakes and species-per-lake live on the phone (SQLite) and sync to Supabase when signal returns. Map areas (map + satellite) are saved for offline by the user.
 - Social: friends via 8-character friend codes; per-catch visibility private / friends / public; leaderboard (online only).
 - Screens: Logbook, Dex, Map (catch pins, saved spots, saved areas, satellite), Gear (tackle box with per-lure stats), species pages, lake pages, catch detail, profile, data sources.

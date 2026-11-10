@@ -3,17 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { BookOpen, Camera, LayoutGrid, Map as MapIcon, Package } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { pickCatchPhotos } from '@/features/catches/photos';
 import { colors } from '@/theme';
-
-/**
- * Camera first: the camera opens straight away, then the form with the photo. Cancelling (or a phone without a
- * camera) still opens the form, so you can log without a photo.
- */
-async function logCatch() {
-  const r = await pickCatchPhotos('camera', 1);
-  router.push(Array.isArray(r) && r[0] ? { pathname: '/catch/new', params: { photo: r[0].uri } } : '/catch/new');
-}
 
 export default function TabsLayout() {
   return (
@@ -43,7 +33,7 @@ export default function TabsLayout() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Log a new catch"
-              onPress={logCatch}
+              onPress={() => router.push('/catch/new')}
               style={({ pressed }) => [styles.cameraSlot, pressed && { opacity: 0.85 }]}>
               <View style={styles.cameraCircle}>
                 <Camera size={22} color={colors.onPrimary} />
