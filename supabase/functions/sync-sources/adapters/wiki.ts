@@ -1,27 +1,9 @@
 // Species summaries and photos from Wikipedia / Wikimedia Commons, region-agnostic.
 // Linked only by IDs the sources maintain: species.fishbase_id -> Wikidata P938 (FishBase ID)
 // -> English Wikipedia sitelink + P18 image. No name matching, no hand-made mapping.
-import { type Adapter, fetchWithRetry, rpc } from './types.ts';
+import { type Adapter, clean, fetchWithRetry, rpc, speciesWithFishbase } from './types.ts';
 
 const CHUNK = 100; // species per step: 2 Commons + 5 Wikipedia requests (Wikidata is one query per run)
-
-const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
-function clean(text: string | null | undefined, limit?: number): string | null {
-  if (!text) return null;
-  let t = text
-    .replace(/<[^>]+>/g, '')
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) =>
-      e[0] === '#' ? String.fromCodePoint(parseInt(e.slice(e[1] === 'x' ? 2 : 1), e[1] === 'x' ? 16 : 10)) : ENTITIES[e] ?? m)
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!t) return null;
-  if (limit && t.length > limit) {
-    const cut = t.slice(0, limit);
-    const dot = cut.lastIndexOf('. ');
-    t = dot > limit * 0.5 ? cut.slice(0, dot + 1) : cut.trimEnd() + '…';
-  }
-  return t;
-}
 
 const json = async <T>(url: string, init?: RequestInit) =>
   (await (await fetchWithRetry(url, { ...init, headers: { Accept: 'application/json', ...(init?.headers ?? {}) } })).json()) as T;
@@ -102,14 +84,7 @@ export const wikiSpecies: Adapter = {
   async step(db, state) {
     // First step of a run: one Wikidata query for every species, kept in state for the following steps.
     if (!state.wd) {
-      const ids: number[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await db.from('species').select('fishbase_id').not('fishbase_id', 'is', null)
-          .order('id').range(from, from + 999);
-        if (error) throw new Error(error.message);
-        ids.push(...(data as { fishbase_id: number }[]).map((r) => r.fishbase_id));
-        if (data.length < 1000) break;
-      }
+      const ids = (await speciesWithFishbase(db)).map((s) => s.fishbase_id);
       const wd = Object.fromEntries(await wikidata(ids));
       return { state: { wd, after: '', changed: 0 }, done: false, rows: 0 };
     }

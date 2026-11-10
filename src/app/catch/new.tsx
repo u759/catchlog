@@ -222,7 +222,7 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
           weather,
           lure: lure.trim() || null,
           gear_id: gearId,
-          waterbody_id: lake?.id ?? existing?.waterbody_id ?? null,
+          waterbody_id: lake?.id ?? null, // offline guess; the server sets the real one
           line_lb: line ? Number.parseFloat(line) || null : null,
           notes: notes.trim() || null,
           released,

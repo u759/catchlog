@@ -1,4 +1,7 @@
-"""Builds the Canadian species seed migration from public datasets.
+"""Builds the Canadian species list (Wild Species 2020) migration. Run once per Wild Species edition.
+
+After seeding, every FishBase-derived column (names, length-weight, habitat flags) is kept current by the
+`fishbase` adapter in supabase/functions/sync-sources; this script only decides which species exist.
 
 Sources (download into one directory, pass it as argv[1]):
   - Wild Species 2020, Canadian Endangered Species Conservation Council (2022). Fish rows of the

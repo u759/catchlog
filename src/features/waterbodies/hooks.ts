@@ -55,21 +55,20 @@ export function useWaterbodySpecies(id: string | null | undefined) {
  * Best local guess of the waterbody at a point, using bounding boxes (works offline). The server
  * replaces it with an exact polygon match when the catch uploads.
  */
+/**
+ * Offline guess of the lake at a point, mirroring the server's rule (nearest lake within 300 m) with
+ * bounding boxes instead of outlines: the smallest lake whose box, padded by 300 m, contains the point.
+ * The server replaces it with the exact answer when the catch syncs.
+ */
 export async function detectWaterbody(lat: number, lng: number): Promise<Waterbody | null> {
-  const inside = await db.getFirstAsync<Record<string, unknown>>(
-    `SELECT * FROM waterbodies WHERE south <= ? AND north >= ? AND west <= ? AND east >= ?
+  const dLat = 300 / 111_320;
+  const dLng = dLat / Math.cos((lat * Math.PI) / 180);
+  const row = await db.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM waterbodies WHERE south - ? <= ? AND north + ? >= ? AND west - ? <= ? AND east + ? >= ?
      ORDER BY area_ha ASC LIMIT 1`,
-    [lat, lat, lng, lng],
+    [dLat, lat, dLat, lat, dLng, lng, dLng, lng],
   );
-  if (inside) return toWaterbody(inside);
-  const d = 0.02; // ~2 km
-  const near = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM waterbodies WHERE north >= ? AND south <= ? AND east >= ? AND west <= ?`,
-    [lat - d, lat + d, lng - d, lng + d],
-  );
-  const dist = (r: Record<string, unknown>) => (Number(r.lat) - lat) ** 2 + ((Number(r.lng) - lng) * Math.cos((lat * Math.PI) / 180)) ** 2;
-  const best = near.sort((a, b) => dist(a) - dist(b))[0];
-  return best ? toWaterbody(best) : null;
+  return row ? toWaterbody(row) : null;
 }
 
 /** Species ids recorded in a waterbody (for boosting suggestions in the catch form). */

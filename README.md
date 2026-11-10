@@ -8,7 +8,7 @@ Fishing catch logger. Expo (React Native) + Supabase. Offline-first: the app rea
 - **Pulls** fetch rows with `updated_at` newer than a per-table cursor (minus a 60s overlap), paged by `(updated_at, id)`. The server stamps `updated_at`. Deleted catches are tombstones (`deleted_at`). Friendships refresh in full (small). Species check a row count, then only changed rows.
 - **Photos** are queued in `photo_queue` and streamed to/from Supabase Storage with backoff. Your photos are downloaded for offline viewing.
 - Runs on sign-in, app foreground, reconnect, after local writes, every 5 minutes, and on pull-to-refresh. Signing out wipes the local copy.
-- **Reference data** (species, profiles, lakes, fish per lake) syncs to the phone only when its version changes. It's refreshed server-side by the `sync-sources` Edge Function every 10 min (each source has its own interval in `data_sources`).
+- **Reference data** (species, profiles, lakes, fish per lake) syncs to the phone only when its version changes. It's refreshed server-side by the `sync-sources` Edge Function (each source has its own interval in `data_sources`).
 - **Online only** (TanStack Query): leaderboard (paginated), other anglers' catches, adding a friend by code.
 
 ## Run
@@ -52,7 +52,7 @@ Lengths and weights are stored in mm and g. `src/utils/units.ts` converts for di
 The `species` table has every fish species in Canada (1,395) plus a few US ones from the first seed. It's built by `scripts/build-species-seed.py` from:
 
 - [Wild Species 2020](https://www.canada.ca/en/environment-climate-change/services/species-risk-public-registry/general-status/wild-species-2020.html) (Canadian Endangered Species Conservation Council, 2022): species list, provinces/oceans, national status rank. The file has no common names for fishes.
-- [FishBase](https://www.fishbase.se) v26.06 (CC BY-NC 4.0, non-commercial): English/French names (AFS official names first), length-weight coefficients, max length, freshwater/saltwater flags, game-fish flag.
+- [FishBase](https://www.fishbase.se) (CC BY-NC 4.0, non-commercial; latest release, checked monthly): English/French names (AFS official names first), length-weight coefficients, max length, freshwater/saltwater flags, game-fish flag.
 
 The FishBase licence is non-commercial. Selling the app would need permission from FishBase.
 
@@ -60,7 +60,7 @@ The FishBase licence is non-commercial. Selling the app would need permission fr
 
 | Job | Schedule | What |
 |---|---|---|
-| `sync-sources` (pg_cron → Edge Function) | every 10 min | Refreshes due sources: BC lakes (180 d), lake depths + depth maps (90 d), fish observations (30 d), Wikipedia summaries + Commons photos (30 d). Progress in `public.data_sources`. |
+| `sync-sources` (pg_cron → Edge Function) | every minute | Calls the function once per due source: BC lakes (180 d), lake depths + depth maps (90 d), fish observations (30 d), FishBase (checked monthly), Wikipedia summaries + Commons photos (30 d). Progress in `public.data_sources`. |
 
 Secrets: `CRON_SECRET` (function secret + Vault `sync_sources_cron_secret`), `FISHIAL_CLIENT_ID/SECRET`.
 
