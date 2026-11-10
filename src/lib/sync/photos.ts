@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import { useSyncExternalStore } from 'react';
 
 import { PHOTO_BUCKET, supabase } from '@/lib/supabase';
 
@@ -17,10 +18,28 @@ const fileName = (path: string) => path.split('/').pop()!;
 export const localPhotoFile = (path: string) => new File(photosDir(), fileName(path));
 export const photoPathFor = (userId: string, photoId: string) => `${userId}/${photoId}.jpg`;
 
+// Local photo files change outside React (background downloads, saves, deletes). Components that show a photo
+// subscribe (useLocalPhotoUri) so a photo appears as soon as its download finishes.
+const listeners = new Set<() => void>();
+function filesChanged() {
+  for (const l of listeners) l();
+}
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+};
+
 export function localPhotoUri(path: string | null | undefined): string | null {
   if (!path) return null;
   const f = localPhotoFile(path);
   return f.exists ? f.uri : null;
+}
+
+/** The on-device photo's URI, updating when it's downloaded, saved or deleted. */
+export function useLocalPhotoUri(path: string | null | undefined): string | null {
+  return useSyncExternalStore(subscribe, () => localPhotoUri(path));
 }
 
 /** Moves a (compressed) temp file into the photos dir under the photo's storage key. */
@@ -30,16 +49,21 @@ export function adoptPhoto(tempUri: string, path: string) {
   const dest = localPhotoFile(path);
   if (dest.exists) dest.delete();
   new File(tempUri).move(dest);
+  filesChanged();
 }
 
 export function deleteLocalPhoto(path: string) {
   const f = localPhotoFile(path);
-  if (f.exists) f.delete();
+  if (f.exists) {
+    f.delete();
+    filesChanged();
+  }
 }
 
 export function deleteAllLocalPhotos() {
   const dir = photosDir();
   if (dir.exists) dir.delete();
+  filesChanged();
 }
 
 type QueueRow = { path: string; action: 'upload' | 'download' | 'delete'; attempts: number };
@@ -78,6 +102,7 @@ async function transfer(item: QueueRow) {
       headers: await headers(),
       idempotent: true,
     });
+    filesChanged();
   } else {
     const { error } = await supabase.storage.from(PHOTO_BUCKET).remove([item.path]);
     if (error) throw error;

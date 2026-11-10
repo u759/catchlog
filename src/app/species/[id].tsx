@@ -10,7 +10,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { Badge, Button, EmptyState, Group, Row, Section } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { parseTs } from '@/features/catches/model';
-import { localPhotoUri } from '@/features/catches/photos';
+import { useLocalPhotoUri } from '@/lib/sync/photos';
 import { environmentLabel, migrationLabel } from '@/features/collection/fishbaseLabels';
 import { useSpecies, useSpeciesLakes } from '@/features/collection/hooks';
 import { useUnits } from '@/features/profile/hooks';
@@ -46,6 +46,9 @@ export default function SpeciesScreen() {
     ['catches'],
   );
 
+  // Your newest catch of this species that has a photo leads the page.
+  const bestPhoto = useLocalPhotoUri(mine.find((c) => c.photo_path)?.photo_path);
+
   useEffect(() => {
     Location.getLastKnownPositionAsync().then((p) => p && setHere({ lat: p.coords.latitude, lng: p.coords.longitude })).catch(() => {});
   }, []);
@@ -68,7 +71,6 @@ export default function SpeciesScreen() {
   const found = mine.length > 0;
   const pbLength = Math.max(0, ...mine.map((c) => c.length_mm ?? 0));
   const pbWeight = Math.max(0, ...mine.map((c) => c.weight_g ?? 0));
-  const bestPhoto = mine.map((c) => localPhotoUri(c.photo_path)).find(Boolean);
   const heroImage = bestPhoto ?? (s.image_url as string | null);
   const spawning = (() => {
     try {

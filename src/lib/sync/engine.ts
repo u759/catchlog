@@ -432,14 +432,19 @@ async function runOnce() {
     await pullCatchPhotos(userId);
     await pullProfile();
     await pullFriendships(userId);
+    // Your own photos before reference data: after signing in, the Logbook fills in first instead of waiting
+    // behind the lake download. Failed transfers back off and wait for a later run.
+    const drainPhotos = async () => {
+      for (let i = 0; i < 20 && status.online; i++) {
+        if ((await processPhotoQueue()) === 0) break;
+      }
+    };
+    await drainPhotos();
     for (const t of REFERENCE) await pullReference(t);
     await prefetchSpeciesImages();
     // Weather/place for catches logged without signal, from each catch's own time and position.
     await backfillCatchDetails(userId, writeLocal).catch(() => {});
-    // Drain due photo transfers (failed ones back off and wait for a later run).
-    for (let i = 0; i < 20 && status.online; i++) {
-      if ((await processPhotoQueue()) === 0) break;
-    }
+    await drainPhotos(); // anything queued meanwhile (a catch saved during this run)
     const now = new Date().toISOString();
     await setState('has_synced', '1');
     await setState('last_synced_at', now);

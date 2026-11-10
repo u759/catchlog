@@ -7,7 +7,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 
 import { AppHeader } from '@/components/AppHeader';
 import { Badge, Dropdown, EmptyState, SearchField } from '@/components/ui';
-import { localPhotoUri } from '@/features/catches/photos';
+import { useLocalPhotoUri } from '@/lib/sync/photos';
 import { matchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { environmentLabel } from '@/features/collection/fishbaseLabels';
 import { usePendingUploads } from '@/features/catches/hooks';
@@ -166,7 +166,8 @@ export default function Dex() {
 
 function DexCard({ entry: e, units, nearLakes }: { entry: DexEntry; units: ReturnType<typeof useUnits>; nearLakes: number | null }) {
   const found = e.caught > 0;
-  const photo = (found && localPhotoUri(e.best_photo)) || null;
+  const ownPhoto = useLocalPhotoUri(e.best_photo);
+  const photo = (found && ownPhoto) || null;
   const image = photo ?? e.thumb;
   const sub = found
     ? e.pb_length_mm != null

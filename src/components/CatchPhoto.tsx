@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { Fish } from 'lucide-react-native';
 import { type ImageStyle, StyleSheet, View, type ViewStyle } from 'react-native';
 
-import { localPhotoUri } from '@/features/catches/photos';
+import { useLocalPhotoUri } from '@/lib/sync/photos';
 import { colors } from '@/theme';
 
 type Props = {
@@ -18,7 +18,8 @@ type Props = {
  * URL. cacheKey = storage path, so expo-image's disk cache survives signed-URL rotation.
  */
 export function CatchPhoto({ photoPath, photoUrl, style, iconSize = 28 }: Props) {
-  const local = localPhotoUri(photoPath ?? null);
+  // Updates when the download lands (e.g. right after signing in on a new phone).
+  const local = useLocalPhotoUri(photoPath);
   const source = local ? { uri: local } : photoUrl ? { uri: photoUrl, cacheKey: photoPath ?? undefined } : null;
 
   if (!source) {

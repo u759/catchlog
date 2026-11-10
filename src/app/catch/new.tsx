@@ -33,7 +33,8 @@ import {
 } from '@/features/catches/hooks';
 import { identifyFish, type IdResult } from '@/features/catches/identify';
 import { type CatchPhotoRef, type CatchView, parseTs } from '@/features/catches/model';
-import { localPhotoUri, pickCatchPhotos } from '@/features/catches/photos';
+import { pickCatchPhotos } from '@/features/catches/photos';
+import { useLocalPhotoUri } from '@/lib/sync/photos';
 import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { useGearList } from '@/features/gear/hooks';
 import { isLure } from '@/features/gear/taxonomy';
@@ -277,7 +278,8 @@ function CatchForm({
 
   // Fishial identifies the cover photo (the same compressed JPEG that gets uploaded).
   const cover = photos[0];
-  const coverUri = cover ? (cover.uri ?? localPhotoUri(cover.path)) : null;
+  const coverFile = useLocalPhotoUri(cover?.uri ? null : cover?.path);
+  const coverUri = cover ? (cover.uri ?? coverFile) : null;
   const shownId = idResult && idResult.photoId === cover?.id ? idResult : null;
   async function identify() {
     if (!coverUri || !cover) return;

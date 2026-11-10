@@ -83,7 +83,7 @@ Check here first; extend these instead of adding parallel versions.
 - `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts` (`fetchCurrentWeather`, `fetchWeatherAt` for a past hour), `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
 - `src/utils/units.ts`: length, weight, depth, lure weight, distance, gauge level (+ change), flow, tide height formatting/parsing.
 
-**Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue), `images.ts` (species photo prefetch for offline), `backfill.ts` (weather/place for catches logged offline, by catch time).
+**Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue; `useLocalPhotoUri`: a photo file that updates when its download lands), `images.ts` (species photo prefetch for offline), `backfill.ts` (weather/place for catches logged offline, by catch time).
 
 **Server (`supabase/`):**
 - `sync-sources` Edge Function adapters: `bc.ts` (lakes, depths, depth maps, which lakes have contours, fish codes, fish observations), `fishbase.ts`, `wiki.ts`, `mapstyles.ts` (satellite style), `conditions.ts` (CHS tide stations, ECCC gauges + `lake_stations`, and `catch-conditions`: tide/gauge/sea temperature per catch at its own time). Status/credits rows in `public.data_sources`.
