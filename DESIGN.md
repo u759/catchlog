@@ -262,7 +262,7 @@ Map floats sit over imagery with the Map float shadow. Top: one Surface panel ho
 Icon in a Sunken circle, Headline title, Secondary explanation, then one action.
 
 ### Motion
-Motion is built into the shared components with Reanimated 4, never added per screen: Segmented slides its pill (CSS transition, 220ms), Sheet slides its panel over a fading backdrop (280ms in, 200ms out), Dropdown fades and settles (160ms in, 120ms out), and single-column lists that change use `listItemLayout` so rows glide to new positions. Durations are the `motion` tokens in the theme; enter with ease-out, exit with ease-in. Reduce Motion is honoured app-wide (`ReducedMotionConfig` + `useReducedMotion`). Screen transitions are the platform's native ones.
+Motion is built into the shared components with Reanimated 4, never added per screen: Segmented slides its pill (CSS transition, 220ms), Sheet slides its panel over a fading backdrop (280ms in, 200ms out), Dropdown fades and settles (160ms in, 120ms out), and single-column lists that change use `listItemLayout` so rows glide to new positions. Durations are the `motion` tokens in the theme; enter with ease-out, exit with ease-in. Reduce Motion is honoured app-wide (Reanimated's system default + `useReducedMotion` in the components). Screen transitions are the platform's native ones.
 
 ## Do's and Don'ts
 

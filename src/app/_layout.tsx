@@ -3,7 +3,6 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { persister, persistMaxAge, queryClient } from '@/lib/queryClient';
@@ -11,13 +10,14 @@ import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
+// Opening a modal route directly (deep link, notification) puts the tabs underneath it.
+export const unstable_settings = { anchor: '(tabs)' };
+
 export default function RootLayout() {
   return (
     <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: persistMaxAge }}>
       <AuthProvider>
         <StatusBar style="dark" />
-        {/* Every Reanimated animation follows the phone's Reduce Motion setting. */}
-        <ReducedMotionConfig mode={ReduceMotion.System} />
         <RootNavigator />
       </AuthProvider>
     </PersistQueryClientProvider>

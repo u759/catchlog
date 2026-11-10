@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 
 import { useAuth } from '@/lib/auth';
 import { db, useLiveQuery } from '@/lib/sync/db';
-import { requestSync, useSyncStatus, writeLocal } from '@/lib/sync/engine';
+import { syncNow, useSyncStatus, writeLocal } from '@/lib/sync/engine';
 import { adoptPhoto, deleteLocalPhoto, photoPathFor } from '@/lib/sync/photos';
 
 import { fetchRemoteCatch } from './api';
@@ -117,7 +117,8 @@ export function usePendingUploads() {
   return { count: st.pending, connected: st.online, hasSynced: st.hasSynced, syncing: st.syncing };
 }
 
-export const refreshSync = () => requestSync();
+/** Pull-to-refresh: resolves when the sync finishes. */
+export const refreshSync = () => syncNow();
 
 // ── writes (local first; src/lib/sync uploads when online) ──────────────────────
 

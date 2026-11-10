@@ -435,7 +435,7 @@ async function runOnce() {
     for (const t of REFERENCE) await pullReference(t);
     await prefetchSpeciesImages();
     // Weather/place for catches logged without signal, from each catch's own time and position.
-    await backfillCatchDetails(userId).catch(() => {});
+    await backfillCatchDetails(userId, writeLocal).catch(() => {});
     // Drain due photo transfers (failed ones back off and wait for a later run).
     for (let i = 0; i < 20 && status.online; i++) {
       if ((await processPhotoQueue()) === 0) break;
@@ -453,6 +453,13 @@ async function runOnce() {
 }
 
 /** Requests a sync soon. Safe to call often; runs are single-flight and coalesced. */
+/** Syncs now and resolves when that run (and any rerun it triggers) has finished. For pull-to-refresh. */
+export async function syncNow() {
+  requestSync(0);
+  await new Promise((r) => setTimeout(r, 0)); // let requestSync's timer start the run
+  await running;
+}
+
 export function requestSync(delayMs = 0) {
   clearTimeout(debounce);
   debounce = setTimeout(() => {

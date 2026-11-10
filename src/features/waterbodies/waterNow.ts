@@ -26,9 +26,18 @@ export async function fetchWaterNow(station: LakeGauge): Promise<WaterNow> {
   const start = new Date(+end - 26 * 3_600_000);
   const url = 'https://wateroffice.ec.gc.ca/services/real_time_data/csv/inline?' +
     `stations[]=${station.station_number}&parameters[]=5&parameters[]=46&parameters[]=47&start_date=${fmt(start)}&end_date=${fmt(end)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Water Survey ${res.status}`);
-  const lines = (await res.text()).split('\n').slice(1);
+  // A weak signal at the lake shouldn't leave "Reading the gauge…" up forever.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 20_000);
+  let text: string;
+  try {
+    const res = await fetch(url, { signal: abort.signal });
+    if (!res.ok) throw new Error(`Water Survey ${res.status}`);
+    text = await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+  const lines = text.split('\n').slice(1);
   const series: Record<string, { t: number; v: number }[]> = {};
   for (const line of lines) {
     const [, date, param, value] = line.split(',');

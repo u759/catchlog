@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FlatList, type ImageStyle, StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 
 import { CatchPhoto } from '@/components/CatchPhoto';
 import type { CatchPhotoRef } from '@/features/catches/model';
@@ -13,6 +13,7 @@ import { colors, motion, radius, space } from '@/theme';
 export function PhotoPager({ photos, style }: { photos: CatchPhotoRef[]; style?: ImageStyle }) {
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   if (photos.length <= 1) {
     return <CatchPhoto photoPath={photos[0]?.path} photoUrl={photos[0]?.url} style={style} iconSize={48} />;
@@ -39,7 +40,10 @@ export function PhotoPager({ photos, style }: { photos: CatchPhotoRef[]; style?:
       </View>
       <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {photos.map((p, i) => (
-          <Animated.View key={p.id} style={[styles.dot, i === page && styles.dotActive]} />
+          <Animated.View
+            key={p.id}
+            style={[styles.dot, { transitionDuration: reduceMotion ? 0 : motion.fast }, i === page && styles.dotActive]}
+          />
         ))}
       </View>
     </View>
@@ -55,7 +59,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.borderStrong,
     transitionProperty: ['width', 'backgroundColor'],
-    transitionDuration: motion.fast,
     transitionTimingFunction: 'ease-out',
   },
   dotActive: { width: 16, backgroundColor: colors.primary },

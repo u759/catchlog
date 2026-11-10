@@ -46,7 +46,7 @@ export const type = {
  * Motion tokens (milliseconds). Motion lives in the shared components (Segmented, Sheet, Dropdown) and list
  * layout transitions (`listItemLayout`), built on Reanimated 4: CSS transitions for state changes, layout
  * animations for lists. Never hand-roll animations in screens. Enter ease-out, exit ease-in; Reduce Motion is
- * honoured app-wide (ReducedMotionConfig in the root layout + useReducedMotion in components).
+ * honoured app-wide: Reanimated animations follow the system setting by default, and components use useReducedMotion.
  */
 export const motion = {
   fast: 160, // menus, small state changes

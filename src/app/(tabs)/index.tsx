@@ -57,6 +57,14 @@ export default function Logbook() {
   // With a single catch, the personal-best card already shows it; don't repeat it as a "Recent" row.
   const catches = !searchActive && filter === 'all' && best && rows.length === 1 && rows[0].id === best.id ? [] : rows;
 
+  // The spinner shows only for a pull: background syncs (every few minutes, often while another tab is open)
+  // would otherwise start it offscreen.
+  const [pulling, setPulling] = useState(false);
+  const onPull = () => {
+    setPulling(true);
+    refreshSync().finally(() => setPulling(false));
+  };
+
   const toggleSearch = () => {
     setSearching((s) => !s);
     setQuery('');
@@ -191,7 +199,7 @@ export default function Logbook() {
           )
         }
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xxl }}
-        refreshControl={<RefreshControl refreshing={sync.syncing} onRefresh={refreshSync} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={onPull} tintColor={colors.primary} />}
       />
     </View>
   );

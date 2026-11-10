@@ -23,8 +23,14 @@ export default function Leaderboard() {
   const [period, setPeriod] = useState<LeaderboardPeriod>('year');
   const units = useUnits();
   const me = useUserId();
-  const { data: pages, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeaderboard(period);
+  const { data: pages, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeaderboard(period);
   const data = pages?.pages.flat() ?? [];
+  // Spinner only for a pull (not background refetches).
+  const [pulling, setPulling] = useState(false);
+  const onPull = () => {
+    setPulling(true);
+    refetch().finally(() => setPulling(false));
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -40,7 +46,7 @@ export default function Leaderboard() {
             <View style={styles.separator} />
           </View>
         )}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={onPull} tintColor={colors.primary} />}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
           if (hasNextPage && !isFetchingNextPage) void fetchNextPage();

@@ -297,14 +297,12 @@ function CatchForm({
       value: caughtAt,
       mode: 'date',
       maximumDate: new Date(),
-      onChange: (e, date) => {
-        if (e.type !== 'set' || !date) return;
+      onValueChange: (_, date) => {
         DateTimePickerAndroid.open({
           value: date,
           mode: 'time',
-          onChange: (e2, time) => {
-            if (e2.type === 'set' && time) setCaughtAt(time);
-          },
+          // The date picker caps the day; a time later today is clamped to now.
+          onValueChange: (_e, time) => setCaughtAt(time > new Date() ? new Date() : time),
         });
       },
     });
@@ -511,7 +509,7 @@ function CatchForm({
                 display="compact"
                 maximumDate={new Date()}
                 accentColor={colors.primary}
-                onChange={(_, d) => d && setCaughtAt(d)}
+                onValueChange={(_, d) => setCaughtAt(d)}
               />
             </View>
           ) : (

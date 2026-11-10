@@ -4,13 +4,13 @@ import { parseTs } from '@/features/catches/model';
 import { fetchWeatherAt } from '@/features/weather/openMeteo';
 
 import { db, getState, setState } from './db';
-import { writeLocal } from './engine';
+import type { writeLocal as WriteLocal } from './engine';
 
 /**
  * Catches logged without signal have no weather or place name. Once online, fill them in from the catch's own
  * time and position (never "now"). A few per sync run; each catch is tried at most 3 times.
  */
-export async function backfillCatchDetails(userId: string) {
+export async function backfillCatchDetails(userId: string, writeLocal: typeof WriteLocal) {
   const rows = await db.getAllAsync<{ id: string; caught_at: string; lat: number; lng: number; weather: string | null; place_name: string | null }>(
     `SELECT id, caught_at, lat, lng, weather, place_name FROM catches
      WHERE user_id = ? AND deleted_at IS NULL AND lat IS NOT NULL AND lng IS NOT NULL
