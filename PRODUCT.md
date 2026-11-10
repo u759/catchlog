@@ -22,7 +22,7 @@ Offline-first catch log backed by real public data rather than user-generated gu
 
 ## Operating Context
 
-- Logging: camera → species (fuzzy search, lake species boosted) → length/weight (weight estimated from FishBase length–weight formulas) → lure from the tackle box → save. Weather, moon/sun/solunar and the lake are attached automatically.
+- Logging: camera first → species (fuzzy search, lake species boosted, optional photo ID by Fishial.ai) → length/weight (weight estimated from FishBase length–weight formulas) → lure from the tackle box → save. Up to 6 photos per catch. Weather, moon/sun/solunar and the lake are attached automatically; tide, water temperature/level/flow and sea temperature are added by the server for the catch's own time and place.
 - Offline: catches, photos, gear, spots, species, lakes and species-per-lake live on the phone (SQLite) and sync to Supabase when signal returns. Map areas (map + satellite) are saved for offline by the user.
 - Social: friends via 8-character friend codes; per-catch visibility private / friends / public; leaderboard (online only).
 - Screens: Logbook, Dex, Map (catch pins, saved spots, saved areas, satellite), Gear (tackle box with per-lure stats), species pages, lake pages, catch detail, profile, data sources.
@@ -34,7 +34,7 @@ Offline-first catch log backed by real public data rather than user-generated gu
 - Region: BC data today; schema and data adapters are built to add other provinces.
 - Data is refreshed automatically server-side; no manual maintenance is expected.
 - Licences shape the product: FishBase CC BY-NC (non-commercial), EOX Sentinel-2 cloudless CC BY-NC-SA, OpenFreeMap tile limits, Wikimedia per-file credits shown on species pages, BC OGL attributions on the Data sources screen.
-- Undecided: species ID from photos (Fishial) is planned, not built; knot/rig guide postponed.
+- Species ID from photos uses Fishial.ai's free plan (100 a month shared by everyone, capped per user). Knot/rig guide and region-scoped lake download are postponed.
 
 ## Brand Commitments
 
