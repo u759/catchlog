@@ -43,6 +43,7 @@ function RootNavigator() {
         <Stack.Screen name="leaderboard" />
         <Stack.Screen name="profile" />
         <Stack.Screen name="credits" />
+        <Stack.Screen name="offline-areas" />
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="sign-in" />

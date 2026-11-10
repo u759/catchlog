@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { BookOpen, Camera, LayoutGrid, Map as MapIcon, Package } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { colors, shadow } from '@/theme';
+import { colors } from '@/theme';
 
 export default function TabsLayout() {
   return (
@@ -27,16 +27,17 @@ export default function TabsLayout() {
         name="camera"
         options={{
           title: '',
+          // In line with the other tabs (not raised), centred in the bar: a filled circle so logging a catch stays the obvious action.
           tabBarButton: () => (
-            <View style={styles.cameraSlot}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Log a new catch"
-                onPress={() => router.push('/catch/new')}
-                style={({ pressed }) => [styles.cameraButton, pressed && { opacity: 0.85 }]}>
-                <Camera size={26} color={colors.onPrimary} />
-              </Pressable>
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log a new catch"
+              onPress={() => router.push('/catch/new')}
+              style={({ pressed }) => [styles.cameraSlot, pressed && { opacity: 0.85 }]}>
+              <View style={styles.cameraCircle}>
+                <Camera size={22} color={colors.onPrimary} />
+              </View>
+            </Pressable>
           ),
         }}
       />
@@ -53,17 +54,8 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  cameraSlot: { flex: 1, alignItems: 'center' },
-  cameraButton: {
-    marginTop: -22,
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: colors.bg,
-    ...shadow,
+  cameraSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  cameraCircle: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
   },
 });
