@@ -7,15 +7,11 @@ import {
   isValidElement,
   type PropsWithChildren,
   type ReactNode,
-  useEffect,
   useRef,
   useState,
 } from 'react';
 import {
-  AccessibilityInfo,
   ActivityIndicator,
-  Animated,
-  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -28,9 +24,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import Animated, { LinearTransition, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, floating, radius, space, touch, type } from '@/theme';
+import { colors, floating, motion, radius, space, touch, type } from '@/theme';
 
 // Components follow DESIGN.md ("The Tackle Box"): flat, forest is the only interactive tint, system text roles.
 
@@ -110,8 +107,28 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  // The selected pill slides between segments: a CSS transition on its position (Reanimated 4).
+  const reduceMotion = useReducedMotion();
+  const [trackW, setTrackW] = useState(0);
+  const index = Math.max(0, options.findIndex((o) => o.value === value));
+  const segW = trackW ? (trackW - SEG_PAD * 2) / options.length : 0;
+
   return (
-    <View style={styles.segTrack} accessibilityRole="tablist">
+    <View style={styles.segTrack} accessibilityRole="tablist" onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
+      {segW > 0 && (
+        <Animated.View
+          style={[
+            styles.segThumb,
+            {
+              width: segW,
+              transform: [{ translateX: index * segW }],
+              transitionProperty: 'transform',
+              transitionDuration: reduceMotion ? 0 : motion.base,
+              transitionTimingFunction: 'ease-out',
+            },
+          ]}
+        />
+      )}
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -120,7 +137,7 @@ export function Segmented<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(o.value)}
-            style={[styles.seg, on && styles.segOn]}>
+            style={[styles.seg, on && segW === 0 && styles.segOn]}>
             <Text style={[styles.segLabel, !on && { color: colors.textMuted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
               {o.label}
             </Text>
@@ -130,6 +147,8 @@ export function Segmented<T extends string>({
     </View>
   );
 }
+
+const SEG_PAD = 3;
 
 // ── Section: a headline on the page, content below (no box) ───────────────
 export function Section({ title, right, children, style }: PropsWithChildren<{ title?: string; right?: ReactNode; style?: ViewStyle }>) {
@@ -228,20 +247,10 @@ export function Facts({ items, style }: { items: (string | null | undefined | fa
   );
 }
 
-// ── Motion helpers ────────────────────────────────────────────────────────
-function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => sub.remove();
-  }, []);
-  return reduce;
-}
-
 // ── Sheet: a bottom sheet for a small, self-contained choice (map layers) ──
-// The backdrop fades in place while only the panel slides up (or just fades, with Reduce Motion).
-// `children` may be a function that receives `close(after?)` to animate out before acting.
+// The backdrop fades in place while only the panel slides up (or just fades, with Reduce Motion). Both are CSS
+// transitions on an `entered` flag. `children` may be a function receiving `close(after?)`, which animates out
+// before acting.
 type Close = (after?: () => void) => void;
 export function Sheet({
   visible,
@@ -255,30 +264,41 @@ export function Sheet({
   children: ReactNode | ((close: Close) => ReactNode);
 }) {
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReduceMotion();
-  const [progress] = useState(() => new Animated.Value(0));
-  const [height, setHeight] = useState(400);
+  const reduceMotion = useReducedMotion();
+  const [entered, setEntered] = useState(false);
+  const [height, setHeight] = useState(600);
+  const duration = reduceMotion ? 0 : entered ? motion.slow : motion.exit;
+  const easing = entered ? 'ease-out' : 'ease-in';
 
-  const open = () => {
-    progress.setValue(0);
-    Animated.timing(progress, { toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  };
   const close: Close = (after) => {
-    Animated.timing(progress, { toValue: 0, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+    setEntered(false);
+    setTimeout(() => {
       onClose();
       after?.();
-    });
+    }, reduceMotion ? 0 : motion.exit);
   };
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [reduceMotion ? 0 : height, 0] });
 
   return (
-    <Modal visible={visible} transparent animationType="none" onShow={open} onRequestClose={() => close()} statusBarTranslucent>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: progress }]}>
+    <Modal visible={visible} transparent animationType="none" onShow={() => setEntered(true)} onRequestClose={() => close()}
+      statusBarTranslucent>
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.backdrop,
+          { opacity: entered ? 1 : 0, transitionProperty: 'opacity', transitionDuration: duration, transitionTimingFunction: easing }]}>
         <Pressable style={{ flex: 1 }} onPress={() => close()} accessibilityLabel="Close" />
       </Animated.View>
       <Animated.View
         onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
-        style={[styles.sheet, { paddingBottom: insets.bottom + space.lg, transform: [{ translateY }], opacity: reduceMotion ? progress : 1 }]}
+        style={[
+          styles.sheet,
+          {
+            paddingBottom: insets.bottom + space.lg,
+            transform: [{ translateY: entered || reduceMotion ? 0 : height }],
+            opacity: reduceMotion && !entered ? 0 : 1,
+            transitionProperty: ['transform', 'opacity'],
+            transitionDuration: reduceMotion ? motion.fast : duration,
+            transitionTimingFunction: easing,
+          },
+        ]}
         accessibilityViewIsModal>
         <View style={styles.sheetHeader}>
           <Text style={[type.headline, { flex: 1 }]} accessibilityRole="header">
@@ -294,7 +314,7 @@ export function Sheet({
   );
 }
 
-// ── Dropdown: a menu anchored under its button (e.g. the map's species filter) ──
+// ── Dropdown: a menu anchored under its button (map species filter, Dex view and family) ──
 export function Dropdown<T extends string | null>({
   options,
   value,
@@ -305,33 +325,30 @@ export function Dropdown<T extends string | null>({
   neutral,
 }: {
   options: { value: T; label: string; detail?: string }[];
-  /** A view switch rather than a filter: never shows the "filter active" fill. */
-  neutral?: boolean;
   value: T;
   onChange: (v: T) => void;
   accessibilityLabel: string;
   buttonStyle?: ViewStyle;
   selectedButtonStyle?: ViewStyle;
+  /** A view switch rather than a filter: never shows the "filter active" fill. */
+  neutral?: boolean;
 }) {
   const button = useRef<ComponentRef<typeof View>>(null);
-  const reduceMotion = useReduceMotion();
-  const [progress] = useState(() => new Animated.Value(0));
+  const reduceMotion = useReducedMotion();
   const [anchor, setAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [entered, setEntered] = useState(false);
   const { width: screenW, height: screenH } = useWindowDimensions();
   const current = options.find((o) => o.value === value);
   const active = !neutral && value !== options[0]?.value;
 
-  const show = () =>
-    button.current?.measureInWindow((x, y, w, h) => {
-      setAnchor({ x, y, w, h });
-      progress.setValue(0);
-      Animated.timing(progress, { toValue: 1, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    });
-  const hide = (after?: () => void) =>
-    Animated.timing(progress, { toValue: 0, duration: 120, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+  const show = () => button.current?.measureInWindow((x, y, w, h) => setAnchor({ x, y, w, h }));
+  const hide = (after?: () => void) => {
+    setEntered(false);
+    setTimeout(() => {
       setAnchor(null);
       after?.();
-    });
+    }, reduceMotion ? 0 : motion.exitFast);
+  };
 
   const menuW = Math.min(260, screenW - space.lg * 2);
   const left = anchor ? Math.max(space.lg, Math.min(anchor.x + anchor.w - menuW, screenW - menuW - space.lg)) : 0;
@@ -351,7 +368,8 @@ export function Dropdown<T extends string | null>({
         </Text>
         <ChevronDown size={16} color={active ? colors.onPrimary : colors.text} />
       </Pressable>
-      <Modal visible={!!anchor} transparent animationType="none" onRequestClose={() => hide()} statusBarTranslucent>
+      <Modal visible={!!anchor} transparent animationType="none" onShow={() => setEntered(true)} onRequestClose={() => hide()}
+        statusBarTranslucent>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => hide()} accessibilityLabel="Close menu" />
         <Animated.View
           style={[
@@ -361,13 +379,11 @@ export function Dropdown<T extends string | null>({
               left,
               width: menuW,
               maxHeight: Math.max(160, screenH - top - space.xxl * 2),
-              opacity: progress,
-              transform: reduceMotion
-                ? []
-                : [
-                    { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) },
-                    { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
-                  ],
+              opacity: entered ? 1 : 0,
+              transform: [{ translateY: entered || reduceMotion ? 0 : -6 }, { scale: entered || reduceMotion ? 1 : 0.97 }],
+              transitionProperty: ['opacity', 'transform'],
+              transitionDuration: reduceMotion ? 0 : entered ? motion.fast : motion.exitFast,
+              transitionTimingFunction: entered ? 'ease-out' : 'ease-in',
             },
           ]}
           accessibilityViewIsModal>
@@ -469,7 +485,8 @@ const styles = StyleSheet.create({
   },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: colors.text },
-  segTrack: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 3 },
+  segTrack: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: SEG_PAD },
+  segThumb: { position: 'absolute', top: SEG_PAD, bottom: SEG_PAD, left: SEG_PAD, backgroundColor: colors.surface, borderRadius: radius.md - 2 },
   seg: { flex: 1, minHeight: 38, borderRadius: radius.md - 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
   segOn: { backgroundColor: colors.surface },
   segLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: colors.text },
@@ -527,3 +544,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+/** Layout transition for single-column lists whose rows change (filters, deletes): rows slide to new positions. */
+export const listItemLayout = LinearTransition.duration(motion.base);

@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { Trophy, Users } from 'lucide-react-native';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Image } from 'expo-image';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Button, EmptyState, Segmented } from '@/components/ui';
+import { Button, EmptyState, listItemLayout, Segmented } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { type LeaderboardPeriod, useLeaderboard } from '@/features/leaderboard/hooks';
 import { useUnits } from '@/features/profile/hooks';
@@ -28,8 +29,10 @@ export default function Leaderboard() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Leaderboard" back />
-      <FlatList
+      <Animated.FlatList
         data={data}
+        itemLayoutAnimation={listItemLayout}
+        skipEnteringExitingAnimations
         keyExtractor={(r) => r.user_id}
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xxl }}
         ItemSeparatorComponent={() => (

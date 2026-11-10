@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { CloudOff, CloudUpload, Fish } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { AppHeader } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
-import { Badge, Button, Card, EmptyState, Facts, Segmented } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Facts, listItemLayout, Segmented } from '@/components/ui';
 import {
   type LogbookFilter,
   refreshSync,
@@ -97,8 +98,10 @@ export default function Logbook() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Logbook" />
-      <FlatList
+      <Animated.FlatList
         data={catches}
+        itemLayoutAnimation={listItemLayout}
+        skipEnteringExitingAnimations
         keyExtractor={(c) => c.id}
         renderItem={({ item, index }) => (
           <CatchRow c={item} units={units} first={index === 0} last={index === catches.length - 1} />

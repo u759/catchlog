@@ -216,7 +216,7 @@ Gently rounded and consistent: 12px for buttons, inputs and segmented controls; 
 - **State:** selected chips fill Forest with white label. Chips filter or pick; for 2–3 mutually exclusive settings use the segmented control.
 
 ### Segmented control
-Sunken track, 40px tall, 12px corners; the selected segment is a Surface pill with an Ink label (600, 15px), unselected labels Ink muted. Labels shrink to fit at large text sizes. Used for the Logbook filter, Dex scope, Units, leaderboard period, catch visibility, the map's date range and Map / Satellite.
+Sunken track, 40px tall, 12px corners; the selected segment is a Surface pill with an Ink label (600, 15px), unselected labels Ink muted. Labels shrink to fit at large text sizes. The selected pill slides to the new segment (220ms ease-out); it moves instantly with Reduce Motion. Used for the Logbook filter, Dex scope, Units, leaderboard period, catch visibility, the map's date range and Map / Satellite.
 
 ### Lists and groups
 Surface group, 16px corners, rows ≥ 48px with a Body label, Secondary subtitle, and right-aligned value or chevron; hairline dividers inset 16px. Used for settings, catch facts, lake facts, data sources, saved areas.
@@ -250,6 +250,9 @@ Map floats sit over imagery with the Map float shadow. Top: one Surface panel ho
 
 ### Empty states
 Icon in a Sunken circle, Headline title, Secondary explanation, then one action.
+
+### Motion
+Motion is built into the shared components with Reanimated 4, never added per screen: Segmented slides its pill (CSS transition, 220ms), Sheet slides its panel over a fading backdrop (280ms in, 200ms out), Dropdown fades and settles (160ms in, 120ms out), and single-column lists that change use `listItemLayout` so rows glide to new positions. Durations are the `motion` tokens in the theme; enter with ease-out, exit with ease-in. Reduce Motion is honoured app-wide (`ReducedMotionConfig` + `useReducedMotion`). Screen transitions are the platform's native ones.
 
 ## Do's and Don'ts
 

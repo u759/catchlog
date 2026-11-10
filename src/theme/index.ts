@@ -42,6 +42,20 @@ export const type = {
   stat: t({ fontSize: 22, lineHeight: 28, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] }),
 };
 
+/**
+ * Motion tokens (milliseconds). Motion lives in the shared components (Segmented, Sheet, Dropdown) and list
+ * layout transitions (`listItemLayout`), built on Reanimated 4: CSS transitions for state changes, layout
+ * animations for lists. Never hand-roll animations in screens. Enter ease-out, exit ease-in; Reduce Motion is
+ * honoured app-wide (ReducedMotionConfig in the root layout + useReducedMotion in components).
+ */
+export const motion = {
+  fast: 160, // menus, small state changes
+  base: 220, // sliding selections
+  slow: 280, // sheets entering
+  exitFast: 120,
+  exit: 200,
+} as const;
+
 /** Map float: the only shadow in the system, for controls over map imagery. */
 export const floating = {
   shadowColor: '#000',

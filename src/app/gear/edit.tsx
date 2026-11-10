@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Trash2 } from 'lucide-react-native';
+import { Check, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ModalHeader } from '@/components/AppHeader';
-import { Button, Chip, Field } from '@/components/ui';
+import { Button, Chip, Field, Group, Row, Section, Sheet } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { deleteGear, type Gear, saveGear, useGear } from '@/features/gear/hooks';
-import { GEAR_CATEGORIES } from '@/features/gear/taxonomy';
+import { categoryLabel, GEAR_CATEGORIES, GEAR_GROUPS, hasLureDetails } from '@/features/gear/taxonomy';
 import { useUnits } from '@/features/profile/hooks';
 import { colors, space, type } from '@/theme';
 import { formatLureWeight, lureWeightUnit, parseLureWeight } from '@/utils/units';
@@ -36,6 +36,9 @@ function GearForm({ existing }: { existing: Gear | null }) {
   const [quantity, setQuantity] = useState(existing?.quantity != null ? String(existing.quantity) : '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const subtypes = GEAR_CATEGORIES.find((c) => c.key === category)?.subtypes ?? [];
+  const lureDetails = hasLureDetails(category);
+  const [typeOpen, setTypeOpen] = useState(false);
+  const { height: windowH } = useWindowDimensions();
 
   const onSave = async () => {
     if (!userId) return;
@@ -47,10 +50,10 @@ function GearForm({ existing }: { existing: Gear | null }) {
         subtype,
         name: name.trim(),
         brand: brand.trim() || null,
-        color: color.trim() || null,
+        color: lureDetails ? color.trim() || null : null,
         size: size.trim() || null,
-        weight_g: parseLureWeight(weight, units),
-        hook_size: hook.trim() || null,
+        weight_g: lureDetails ? parseLureWeight(weight, units) : null,
+        hook_size: lureDetails ? hook.trim() || null : null,
         quantity: quantity ? Number.parseInt(quantity, 10) || null : null,
         notes: notes.trim() || null,
       },
@@ -76,41 +79,73 @@ function GearForm({ existing }: { existing: Gear | null }) {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ModalHeader title={existing ? 'Edit gear' : 'Add gear'} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <View style={{ gap: space.xs }}>
-          <Text style={type.caption}>Type</Text>
-          <View style={styles.chips}>
-            {GEAR_CATEGORIES.map((c) => (
-              <Chip key={c.key} label={c.label} selected={category === c.key} onPress={() => { setCategory(c.key); setSubtype(null); }} />
-            ))}
+        <Field label="Name" placeholder='e.g. 5" Senko' value={name} onChangeText={setName} autoFocus={!existing}
+          returnKeyType="done" />
+
+        <View style={{ gap: space.sm }}>
+          <Group>
+            <Row label="Type" value={categoryLabel(category)} onPress={() => setTypeOpen(true)} />
+          </Group>
+          {subtypes.length > 0 && (
+            <View style={{ gap: space.xs }}>
+              <Text style={type.caption}>Style (optional)</Text>
+              <View style={styles.chips}>
+                {subtypes.map((s) => (
+                  <Chip key={s} label={s} selected={subtype === s} onPress={() => setSubtype(subtype === s ? null : s)} />
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
+        <Section title="Details (optional)">
+          <View style={styles.row}>
+            <Field label="Brand" placeholder="Yamamoto" value={brand} onChangeText={setBrand} />
+            {lureDetails ? <Field label="Colour" placeholder="Watermelon" value={color} onChangeText={setColor} /> : null}
           </View>
-        </View>
-        {subtypes.length > 0 && (
-          <View style={styles.chips}>
-            {subtypes.map((s) => (
-              <Chip key={s} label={s} selected={subtype === s} onPress={() => setSubtype(subtype === s ? null : s)} />
-            ))}
+          <View style={styles.row}>
+            <Field label="Size" placeholder={lureDetails ? '5"' : "7'"} value={size} onChangeText={setSize} />
+            {lureDetails ? (
+              <Field label="Weight" placeholder="7" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" suffix={lureWeightUnit(units)} />
+            ) : null}
           </View>
-        )}
-        <Field label="Name" placeholder='e.g. 5" Senko' value={name} onChangeText={setName} />
-        <View style={styles.row}>
-          <Field label="Brand" placeholder="Yamamoto" value={brand} onChangeText={setBrand} />
-          <Field label="Colour" placeholder="Watermelon" value={color} onChangeText={setColor} />
-        </View>
-        <View style={styles.row}>
-          <Field label="Size" placeholder='5"' value={size} onChangeText={setSize} />
-          <Field label="Weight" placeholder="7" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" suffix={lureWeightUnit(units)} />
-        </View>
-        <View style={styles.row}>
-          <Field label="Hook size" placeholder="3/0" value={hook} onChangeText={setHook} />
-          <Field label="Quantity" placeholder="1" value={quantity} onChangeText={setQuantity} keyboardType="number-pad" />
-        </View>
-        <Field label="Notes" placeholder="Rigging, where it works…" value={notes} onChangeText={setNotes} multiline
-          style={{ ...type.body, minHeight: 80, textAlignVertical: 'top', paddingVertical: space.md }} />
+          <View style={styles.row}>
+            {lureDetails ? <Field label="Hook size" placeholder="3/0" value={hook} onChangeText={setHook} /> : null}
+            <Field label="How many" placeholder="1" value={quantity} onChangeText={setQuantity} keyboardType="number-pad" />
+          </View>
+          <Field label="Notes" placeholder="Rigging, where it works…" value={notes} onChangeText={setNotes} multiline
+            style={{ ...type.body, minHeight: 80, textAlignVertical: 'top', paddingVertical: space.md }} />
+        </Section>
         {existing && <Button label="Delete from tackle box" icon={Trash2} variant="danger" onPress={onDelete} style={{ alignSelf: 'flex-start' }} />}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
         <Button label={existing ? 'Save changes' : 'Add to tackle box'} onPress={onSave} />
       </View>
+      <Sheet visible={typeOpen} title="Type" onClose={() => setTypeOpen(false)}>
+        {(close) => (
+          <ScrollView style={{ maxHeight: windowH * 0.6 }} contentContainerStyle={{ gap: space.lg }}>
+            {GEAR_GROUPS.map((g) => (
+              <Section key={g} title={g}>
+                <Group>
+                  {GEAR_CATEGORIES.filter((c) => c.group === g).map((c) => (
+                    <Row
+                      key={c.key}
+                      label={c.label}
+                      right={category === c.key ? <Check size={20} color={colors.primary} /> : null}
+                      onPress={() =>
+                        close(() => {
+                          if (c.key !== category) setSubtype(null);
+                          setCategory(c.key);
+                        })
+                      }
+                    />
+                  ))}
+                </Group>
+              </Section>
+            ))}
+          </ScrollView>
+        )}
+      </Sheet>
     </KeyboardAvoidingView>
   );
 }

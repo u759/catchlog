@@ -61,3 +61,30 @@ Read `docs/decisions.md` first: it records what we chose, what we rejected, and 
 - No maintenance: every external dataset refreshes automatically through an adapter. Don't add one-off seed scripts for data that changes.
 - No fallbacks: link records only through identifiers or exact names the sources publish (FishBase SpecCode, Wikidata P938, FishBase's own name list for scientific names). If a link is missing, leave it unlinked; never add common-name, fuzzy or "try X, else Y" matching, or hand-maintained mapping tables. Spatial lookups use one rule (nearest lake within 300 m). If a source's data quality seems to require a second key, ask first (the one approved case: BC fish codes, see decisions.md).
 - New local tables go in a new entry of `MIGRATIONS` in `src/lib/sync/db.ts` (never edit an old entry) and in `wipeLocalData`.
+
+## What already exists (reuse before building)
+
+Check here first; extend these instead of adding parallel versions.
+
+**Docs:** `PRODUCT.md` (who/why), `DESIGN.md` (visual system, "The Tackle Box"), `docs/decisions.md` (choices and rejections), `docs/research.md` (data sources research).
+
+**UI (`src/components`, `src/theme`):**
+- Theme tokens: `colors`, `type` (7 text roles), `space`, `radius`, `touch` (44), `motion` (durations), `floating` (map-only shadow).
+- `ui/`: `Button` (primary/secondary/text/danger), `Chip`, `Segmented` (sliding pill), `Dropdown` (anchored menu), `Sheet` (bottom sheet), `Section`, `Group`, `Row`, `Facts`, `Badge` (the only lime), `Card`, `Field`, `EmptyState`, `Tip` (one-time hint), `listItemLayout`.
+- `AppHeader` (tab large title / detail back) and `ModalHeader` (forms); `CatchPhoto` (local file first, then signed URL).
+- Motion: Reanimated 4 only. CSS transitions inside the shared components, `listItemLayout` on single-column `Animated.FlatList`s that change, `ReducedMotionConfig` in the root layout. Don't use RN `Animated` or `LayoutAnimation`, and don't hand-roll animations in screens; add motion to the shared component instead.
+
+**Features (`src/features`):**
+- `catches/`: `useLogbook`, `useLogbookStats`, `useBestCatch`, `useCatch`, `saveCatch`, `deleteCatch`, `usePendingUploads`; `model.ts` (`CatchView`, `parseTs`, `speciesLabel`); `photos.ts` (`compressPhoto`, `localPhotoUri`); `speciesSearch.ts` (`useSpeciesIndex`, `searchSpecies`: usual fish, lake species, most widespread).
+- `collection/`: `useDex`, `useSpecies`, `useSpeciesLakes`, `useLakeRegions`, `useNearbySpecies` (`NEAR_KM`); `fishbaseLabels.ts` (plain words for FishBase terms).
+- `waterbodies/`: `useWaterbody`, `useWaterbodySpecies`, `detectWaterbody` (offline lake guess), `speciesInWaterbody`, `openDepthMap`.
+- `map/offline.ts`: map style URLs (OpenFreeMap, satellite), offline-area limits and tile maths, `offlineBytes`.
+- `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts`, `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
+- `src/utils/units.ts`: length, weight, depth, lure weight, distance formatting/parsing.
+
+**Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue), `images.ts` (species photo prefetch for offline).
+
+**Server (`supabase/`):**
+- `sync-sources` Edge Function adapters: `bc.ts` (lakes, depths, depth maps, fish codes, fish observations), `fishbase.ts`, `wiki.ts`, `mapstyles.ts` (satellite style). Status/credits rows in `public.data_sources`.
+- RPCs: `my_profile`, `send_friend_request`, `leaderboard`, `reference_version`, `waterbody_at`; service-role only: `upsert_waterbodies`, `stage_observations`/`finalize_observations`, `set_waterbody_depths`/`set_waterbody_depth_maps`, `patch_species`, `patch_species_profiles`, `replace_species_aliases`, `set_species_wiki`.
+- Storage buckets: `catch-photos` (private, 5 MB), `map-styles` (public satellite style JSON).

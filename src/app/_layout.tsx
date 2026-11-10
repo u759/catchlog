@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { persister, persistMaxAge, queryClient } from '@/lib/queryClient';
@@ -15,6 +16,8 @@ export default function RootLayout() {
     <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: persistMaxAge }}>
       <AuthProvider>
         <StatusBar style="dark" />
+        {/* Every Reanimated animation follows the phone's Reduce Motion setting. */}
+        <ReducedMotionConfig mode={ReduceMotion.System} />
         <RootNavigator />
       </AuthProvider>
     </PersistQueryClientProvider>
