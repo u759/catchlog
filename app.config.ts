@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'light',
   ios: {
     bundleIdentifier: BUNDLE_ID,
-    icon: './assets/expo.icon',
+    icon: './assets/images/icon.png', // made by scripts/make-icons.py
     supportsTablet: false,
   },
   android: {
@@ -41,7 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     [
       'expo-splash-screen',
-      { backgroundColor: '#1C3A2E', image: './assets/images/splash-icon.png', imageWidth: 76 },
+      { backgroundColor: '#1C3A2E', image: './assets/images/splash-icon.png', imageWidth: 120 },
     ],
     [
       'expo-image-picker',

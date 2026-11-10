@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Fish, Pencil, Trash2 } from 'lucide-react-native';
+import { Pencil, Trash2 } from 'lucide-react-native';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { FishMark } from '@/components/FishMark';
 import { AppHeader } from '@/components/AppHeader';
 import { conditionRows } from '@/components/ConditionRows';
 import { PhotoPager } from '@/components/PhotoPager';
@@ -42,7 +43,7 @@ export default function CatchDetails() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         {header}
-        {!isLoading && <EmptyState icon={Fish} title="Catch not found" body="It may have been deleted." />}
+        {!isLoading && <EmptyState icon={FishMark} title="Catch not found" body="It may have been deleted." />}
       </View>
     );
   }

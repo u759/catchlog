@@ -1,9 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
-import { Fish, Mail } from 'lucide-react-native';
+import { Mail } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FishMark } from '@/components/FishMark';
 import { Button } from '@/components/ui';
 import { isGoogleConfigured, sendEmailCode, signInWithGoogle, verifyEmailCode } from '@/lib/auth';
 import { colors, radius, space, type } from '@/theme';
@@ -38,9 +39,8 @@ export default function SignIn() {
       <StatusBar style="light" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.hero}>
-          <View style={styles.logo}>
-            <Fish size={40} color={colors.onAccent} />
-          </View>
+          {/* The app icon's mark, on the same forest background. */}
+          <FishMark size={88} color={colors.accent} strokeWidth={2.2} accessibilityLabel="CatchLog" />
           <Text style={styles.title}>CatchLog</Text>
           <Text style={styles.tagline}>Log your catches, even with no signal.</Text>
         </View>
@@ -134,14 +134,6 @@ const muted = colors.onPrimaryMuted;
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary, paddingHorizontal: space.xl },
   hero: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.lg },
-  logo: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.xl,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: { ...type.largeTitle, color: colors.onPrimary },
   tagline: { ...type.body, color: muted, textAlign: 'center', maxWidth: 300 },
   bottom: { gap: space.md, paddingBottom: space.lg },

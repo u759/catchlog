@@ -1,10 +1,10 @@
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { Fish } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { FishMark } from '@/components/FishMark';
 import { AppHeader } from '@/components/AppHeader';
 import { Badge, Dropdown, EmptyState, SearchField } from '@/components/ui';
 import { useLocalPhotoUri } from '@/lib/sync/photos';
@@ -156,7 +156,7 @@ export default function Dex() {
           </View>
         }
         ListEmptyComponent={
-          waitingForData ? undefined : <EmptyState icon={Fish} title="No fish match" body={query ? 'Try another name or a Dex number.' : 'Log a catch to start your collection.'} />
+          waitingForData ? undefined : <EmptyState icon={FishMark} title="No fish match" body={query ? 'Try another name or a Dex number.' : 'Log a catch to start your collection.'} />
         }
         renderItem={({ item }) => <DexCard entry={item} units={units} nearLakes={scope === 'near' ? (nearby.get(item.id) ?? 0) : null} />}
       />
@@ -189,7 +189,7 @@ function DexCard({ entry: e, units, nearLakes }: { entry: DexEntry; units: Retur
           <Image source={{ uri: image }} style={[StyleSheet.absoluteFill, !found && styles.uncaught]} contentFit="cover" cachePolicy="disk"
             recyclingKey={e.id} transition={120} />
         ) : (
-          <Fish size={28} color={colors.textMuted} />
+          <FishMark size={28} color={colors.textMuted} />
         )}
         {found && (
           <Badge label={`${e.caught}×`} style={styles.caughtBadge} />

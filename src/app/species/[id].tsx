@@ -2,10 +2,10 @@ import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { Fish } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { FishMark } from '@/components/FishMark';
 import { AppHeader } from '@/components/AppHeader';
 import { Badge, Button, EmptyState, Group, Row, Section } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
@@ -64,7 +64,7 @@ export default function SpeciesScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <AppHeader back />
-        <EmptyState icon={Fish} title="Species not found" body="It isn't in the collection on this phone yet." />
+        <EmptyState icon={FishMark} title="Species not found" body="It isn't in the collection on this phone yet." />
       </View>
     );
   }
@@ -116,7 +116,7 @@ export default function SpeciesScreen() {
                 placeholder={s.image_thumb_url ? { uri: s.image_thumb_url as string } : undefined} placeholderContentFit="cover"
                 accessibilityLabel={`Photo of ${String(s.common_name)}`} />
             ) : (
-              <Fish size={56} color={colors.textMuted} />
+              <FishMark size={56} color={colors.textMuted} />
             )}
           </View>
           {!bestPhoto && s.image_author ? (

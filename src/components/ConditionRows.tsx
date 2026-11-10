@@ -7,7 +7,6 @@ import {
   CloudSnow,
   CloudSun,
   Droplets,
-  Fish,
   Gauge,
   type LucideIcon,
   Moon,
@@ -20,6 +19,7 @@ import {
 } from 'lucide-react-native';
 import type { ReactElement } from 'react';
 
+import { FishMark } from '@/components/FishMark';
 import { Row } from '@/components/ui';
 import { type Astro, fmtTime } from '@/features/astro/astro';
 import type { Gauge as GaugeReading, Tide } from '@/features/conditions/model';
@@ -104,7 +104,7 @@ export function conditionRows(c: ConditionInput, units: Units): ReactElement[] {
     rows.push(
       <Row
         key="solunar"
-        icon={Fish}
+        icon={FishMark}
         label="Solunar"
         numberOfLines={2}
         sub={

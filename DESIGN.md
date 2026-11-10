@@ -124,6 +124,8 @@ Colour comes from the content, not the chrome: catch photos, species art, the ma
 
 The app is used outdoors in sun, often with gloves. Contrast and target size are not polish; they are the job.
 
+**Mark:** a simple one-line fish (Lucide "fish-symbol") in lime on forest green: the app icon, splash, the sign-in screen and every generic fish icon in the app (`FishMark`). It's the one place lime appears outside personal highlights.
+
 **Key Characteristics:**
 - One lead per screen; supporting facts as quiet text and grouped rows, never a grid of equal tiles.
 - Flat. No drop shadows except controls floating over the map.

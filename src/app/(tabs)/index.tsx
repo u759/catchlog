@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { CloudOff, CloudUpload, Fish, Search, X } from 'lucide-react-native';
+import { CloudOff, CloudUpload, Search, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { FishMark } from '@/components/FishMark';
 import { AppHeader, HeaderButton } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Badge, Button, Card, EmptyState, Facts, listItemLayout, SearchField, Segmented } from '@/components/ui';
@@ -187,7 +188,7 @@ export default function Logbook() {
             />
           ) : stats.total === 0 ? (
             <EmptyState
-              icon={Fish}
+              icon={FishMark}
               title="No catches yet"
               body="Tap the camera to log your first fish. It works without signal."
               action={<Button label="Log a catch" onPress={() => router.push('/catch/new')} style={{ alignSelf: 'stretch' }} />}

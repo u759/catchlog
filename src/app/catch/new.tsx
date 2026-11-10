@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Calendar, Camera, Fish, ImagePlus, ScanSearch } from 'lucide-react-native';
+import { Calendar, Camera, ImagePlus, ScanSearch } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FishMark } from '@/components/FishMark';
 import { ModalHeader } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Button, Chip, EmptyState, Field, Group, Row, Segmented } from '@/components/ui';
@@ -103,7 +104,7 @@ export default function CatchFormScreen() {
         {isLoading ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
-          <EmptyState icon={Fish} title="Catch not found" body="It may have been deleted." />
+          <EmptyState icon={FishMark} title="Catch not found" body="It may have been deleted." />
         )}
       </View>
     );

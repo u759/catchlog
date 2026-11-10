@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
-import { Fish } from 'lucide-react-native';
 import { type ImageStyle, StyleSheet, View, type ViewStyle } from 'react-native';
 
+import { FishMark } from '@/components/FishMark';
 import { useLocalPhotoUri } from '@/lib/sync/photos';
 import { colors } from '@/theme';
 
@@ -25,7 +25,7 @@ export function CatchPhoto({ photoPath, photoUrl, style, iconSize = 28 }: Props)
   if (!source) {
     return (
       <View style={[styles.placeholder, style as ViewStyle]}>
-        <Fish size={iconSize} color={colors.textMuted} />
+        <FishMark size={iconSize} color={colors.textMuted} />
       </View>
     );
   }
