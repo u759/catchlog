@@ -50,3 +50,10 @@ credentials/
 client_secret_*.json
 
 scratch/**
+# Local EAS build outputs
+build-*.ipa
+build-*.aab
+build-*.apk
+*.ipa
+*.aab
+*.apk
