@@ -70,21 +70,24 @@ Check here first; extend these instead of adding parallel versions.
 
 **UI (`src/components`, `src/theme`):**
 - Theme tokens: `colors`, `type` (7 text roles), `space`, `radius`, `touch` (44), `motion` (durations), `floating` (map-only shadow).
-- `ui/`: `Button` (primary/secondary/text/danger), `Chip`, `Segmented` (sliding pill), `Dropdown` (anchored menu), `Sheet` (bottom sheet), `Section`, `Group`, `Row`, `Facts`, `Badge` (the only lime), `Card`, `Field`, `EmptyState`, `Tip` (one-time hint), `listItemLayout`.
-- `AppHeader` (tab large title / detail back) and `ModalHeader` (forms); `CatchPhoto` (local file first, then signed URL).
+- `ui/`: `Button` (primary/secondary/text/danger), `Chip`, `Segmented` (sliding pill), `Dropdown` (anchored menu), `Sheet` (bottom sheet), `Section`, `Group`, `Row`, `Facts`, `Badge` (the only lime), `Card`, `Field`, `SearchField` (filter a list in place), `EmptyState`, `Tip` (one-time hint), `listItemLayout`.
+- `AppHeader` (tab large title / detail back), `HeaderButton` (round icon button for a tab header's `right`), `ModalHeader` (forms); `CatchPhoto` (local file first, then signed URL); `PhotoPager` (a catch's photos, swipe + page dots).
 - Motion: Reanimated 4 only. CSS transitions inside the shared components, `listItemLayout` on single-column `Animated.FlatList`s that change, `ReducedMotionConfig` in the root layout. Don't use RN `Animated` or `LayoutAnimation`, and don't hand-roll animations in screens; add motion to the shared component instead.
 
 **Features (`src/features`):**
-- `catches/`: `useLogbook`, `useLogbookStats`, `useBestCatch`, `useCatch`, `saveCatch`, `deleteCatch`, `usePendingUploads`; `model.ts` (`CatchView`, `parseTs`, `speciesLabel`); `photos.ts` (`compressPhoto`, `localPhotoUri`); `speciesSearch.ts` (`useSpeciesIndex`, `searchSpecies`: usual fish, lake species, most widespread).
+- `catches/`: `useLogbook` (filter or local search), `useLogbookStats`, `useBestCatch`, `useCatch`, `useCatchPhotos`, `saveCatch` (ordered photo list, first = cover), `deleteCatch`, `usePendingUploads`, `MAX_PHOTOS`; `model.ts` (`CatchView`, `CatchPhotoRef`, `parseTs`, `speciesLabel`); `photos.ts` (`compressPhoto`, `pickCatchPhotos` camera/library, `localPhotoUri`); `identify.ts` (`identifyFish` → `identify` Edge Function); `speciesSearch.ts` (`useSpeciesIndex`, `searchSpecies`: usual fish, lake species, most widespread).
+- `conditions/model.ts`: `CatchConditions` (tide, gauge water, sea temperature at catch time; server-filled), `parseConditions`.
 - `collection/`: `useDex`, `useSpecies`, `useSpeciesLakes`, `useLakeRegions`, `useNearbySpecies` (`NEAR_KM`); `fishbaseLabels.ts` (plain words for FishBase terms).
-- `waterbodies/`: `useWaterbody`, `useWaterbodySpecies`, `detectWaterbody` (offline lake guess), `speciesInWaterbody`, `openDepthMap`.
-- `map/offline.ts`: map style URLs (OpenFreeMap, satellite), offline-area limits and tile maths, `offlineBytes`.
+- `waterbodies/`: `useWaterbody`, `useWaterbodySpecies`, `detectWaterbody` (offline lake guess), `speciesInWaterbody`, `openDepthMap`; `waterNow.ts` (`useLakeGauges`, `useWaterNow`: live gauge readings, online).
+- `map/offline.ts`: map style URLs (OpenFreeMap, satellite), offline-area limits and tile maths, `offlineBytes`. `map/contours.ts`: `useContoursUri` (BC lake depth contours fetched from the BC WFS to a device file, monthly).
 - `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts` (`fetchCurrentWeather`, `fetchWeatherAt` for a past hour), `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
-- `src/utils/units.ts`: length, weight, depth, lure weight, distance formatting/parsing.
+- `src/utils/units.ts`: length, weight, depth, lure weight, distance, gauge level (+ change), flow, tide height formatting/parsing.
 
 **Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue), `images.ts` (species photo prefetch for offline), `backfill.ts` (weather/place for catches logged offline, by catch time).
 
 **Server (`supabase/`):**
-- `sync-sources` Edge Function adapters: `bc.ts` (lakes, depths, depth maps, fish codes, fish observations), `fishbase.ts`, `wiki.ts`, `mapstyles.ts` (satellite style). Status/credits rows in `public.data_sources`.
-- RPCs: `my_profile`, `send_friend_request`, `leaderboard`, `reference_version`, `waterbody_at`; service-role only: `upsert_waterbodies`, `stage_observations`/`finalize_observations`, `set_waterbody_depths`/`set_waterbody_depth_maps`, `patch_species`, `patch_species_profiles`, `replace_species_aliases`, `set_species_wiki`.
+- `sync-sources` Edge Function adapters: `bc.ts` (lakes, depths, depth maps, which lakes have contours, fish codes, fish observations), `fishbase.ts`, `wiki.ts`, `mapstyles.ts` (satellite style), `conditions.ts` (CHS tide stations, ECCC gauges + `lake_stations`, and `catch-conditions`: tide/gauge/sea temperature per catch at its own time). Status/credits rows in `public.data_sources`.
+- `identify` Edge Function: Fishial.ai species ID for one photo (user JWT; cache `private.identify_cache`; caps via `identify_claim`).
+- Tables beyond the basics: `catch_photos` (several photos per catch; `catches.photo_path` stays the cover), `tide_stations`, `water_stations`, `lake_stations` (synced), `catches.conditions` (server-only, enforced by trigger `catches_keep_conditions`), `waterbodies.has_contours`.
+- RPCs: `my_profile`, `send_friend_request`, `leaderboard`, `reference_version`, `waterbody_at`; service-role only: `upsert_waterbodies`, `stage_observations`/`finalize_observations`, `set_waterbody_depths`/`set_waterbody_depth_maps`, `set_waterbody_contours`, `patch_species`, `patch_species_profiles`, `replace_species_aliases`, `set_species_wiki`, `replace_tide_stations`, `replace_water_stations`, `pending_catch_conditions`, `set_catch_conditions`, `identify_claim`, `identify_credits_left`, `identify_cache_get`/`identify_cache_put`.
 - Storage buckets: `catch-photos` (private, 5 MB), `map-styles` (public satellite style JSON).

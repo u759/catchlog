@@ -427,3 +427,6 @@ enabled = true
 
 [functions.sync-sources]
 verify_jwt = false
+
+[functions.identify]
+verify_jwt = false

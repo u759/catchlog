@@ -3,13 +3,12 @@ import * as Crypto from 'expo-crypto';
 import { useMemo } from 'react';
 
 import { useAuth } from '@/lib/auth';
-import { useLiveQuery } from '@/lib/sync/db';
+import { db, useLiveQuery } from '@/lib/sync/db';
 import { requestSync, useSyncStatus, writeLocal } from '@/lib/sync/engine';
-import { adoptPhoto, deleteLocalPhoto, photoPathFor, queuePhoto } from '@/lib/sync/photos';
+import { adoptPhoto, deleteLocalPhoto, photoPathFor } from '@/lib/sync/photos';
 
 import { fetchRemoteCatch } from './api';
-import { type CatchView, fromLocal, LOCAL_CATCH_SELECT, type LocalCatchRow } from './model';
-import { compressPhoto } from './photos';
+import { type CatchPhotoRef, type CatchView, fromLocal, LOCAL_CATCH_SELECT, type LocalCatchRow, photoIdFromPath } from './model';
 
 export function useUserId() {
   return useAuth().session?.user.id ?? null;
@@ -23,13 +22,31 @@ const startOfToday = () => {
   return d.toISOString();
 };
 
+/** Every word must appear in the species name, lake, place, lure or notes (case-insensitive). */
+const SEARCH_FIELDS = ['s.common_name', 's.common_name_fr', 'c.species_other', 'c.waterbody', 'c.place_name', 'c.lure', 'c.notes'];
+function searchWhere(search: string): [string, string[]] {
+  const words = search.trim().split(/\s+/).filter(Boolean).slice(0, 5);
+  const like = (w: string) => `%${w.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  return [
+    words.map(() => `(${SEARCH_FIELDS.map((f) => `${f} LIKE ? ESCAPE '\\'`).join(' OR ')})`).join(' AND '),
+    words.flatMap((w) => SEARCH_FIELDS.map(() => like(w))),
+  ];
+}
+
 /**
- * Your catches from local SQLite, newest first, `limit` at a time (grow it to page in more).
- * julianday() normalises timestamps written locally (ISO "T") and synced ones (space).
+ * Your catches from local SQLite, newest first, `limit` at a time (grow it to page in more). A non-empty `search`
+ * replaces the filter. julianday() normalises timestamps written locally (ISO "T") and synced ones (space).
  */
-export function useLogbook(filter: LogbookFilter, limit: number) {
+export function useLogbook(filter: LogbookFilter, limit: number, search = '') {
   const userId = useUserId() ?? '';
   const [sql, params] = useMemo((): [string, unknown[]] => {
+    if (search.trim()) {
+      const [where, args] = searchWhere(search);
+      return [
+        `${LOCAL_CATCH_SELECT} WHERE c.user_id = ? AND ${where} ORDER BY julianday(c.caught_at) DESC LIMIT ?`,
+        [userId, ...args, limit],
+      ];
+    }
     switch (filter) {
       case 'today':
         return [
@@ -46,7 +63,7 @@ export function useLogbook(filter: LogbookFilter, limit: number) {
       default:
         return [`${LOCAL_CATCH_SELECT} WHERE c.user_id = ? ORDER BY julianday(c.caught_at) DESC LIMIT ?`, [userId, limit]];
     }
-  }, [filter, limit, userId]);
+  }, [filter, limit, userId, search]);
   const { data, isLoading } = useLiveQuery<LocalCatchRow>(sql, params as never, ['catches', 'species']);
   return { catches: useMemo(() => data.map(fromLocal), [data]), isLoading };
 }
@@ -104,8 +121,32 @@ export const refreshSync = () => requestSync();
 
 // ── writes (local first; src/lib/sync uploads when online) ──────────────────────
 
-export type CatchInput = Omit<CatchView, 'id' | 'user_id' | 'species' | 'photo_path' | 'photo_url'>;
-export type NewPhoto = { uri: string; width?: number; height?: number };
+export type CatchInput = Omit<CatchView, 'id' | 'user_id' | 'species' | 'photo_path' | 'photo_url' | 'photos' | 'conditions'>;
+
+/** A photo in the catch form: an existing one (`path`) or a newly picked one (`uri`, already compressed with
+ * compressPhoto so "Identify" and the upload send the same bytes). `id` is set at pick time. */
+export type FormPhoto = { id: string; path?: string; uri?: string; width?: number; height?: number };
+export const MAX_PHOTOS = 6;
+
+/**
+ * Photos of a catch in order (the first is the cover). Own catches: local `catch_photos`, falling back to the
+ * cover path for catches whose photo rows haven't synced yet. Others' catches: the server read in `useCatch`.
+ */
+export function useCatchPhotos(c: CatchView | null | undefined): { photos: CatchPhotoRef[]; isLoading: boolean } {
+  const { data, isLoading } = useLiveQuery<{ id: string; path: string }>(
+    'SELECT id, path FROM catch_photos WHERE catch_id = ? ORDER BY position, created_at',
+    [c?.id ?? ''],
+    ['catch_photos'],
+  );
+  const remote = c?.photos;
+  const cover = c?.photo_path;
+  const photos = useMemo(() => {
+    if (remote) return remote;
+    if (data.length) return data;
+    return cover ? [{ id: photoIdFromPath(cover), path: cover }] : [];
+  }, [remote, cover, data]);
+  return { photos, isLoading };
+}
 
 const COLUMNS = [
   'species_id', 'species_other', 'length_mm', 'weight_g', 'weight_estimated', 'caught_at', 'lat', 'lng',
@@ -122,34 +163,48 @@ function toLocal(input: CatchInput) {
   });
 }
 
+const queueSql = `INSERT OR REPLACE INTO photo_queue (path, action, attempts, next_try_at) VALUES (?, ?, 0, 0)`;
+
 /**
- * Creates or updates a catch locally (instant, works offline) and queues it for upload.
- * A new photo is compressed, kept on-device, and queued for upload separately.
+ * Creates or updates a catch locally (instant, works offline) and queues it for upload. `photos` is the full
+ * ordered list (first = cover, kept in catches.photo_path); new ones are compressed and kept on the device,
+ * removed ones are deleted. Files upload separately through the photo queue.
  */
 export async function saveCatch(opts: {
   id?: string;
   userId: string;
   input: CatchInput;
-  photo?: NewPhoto | null;
-  previousPhotoPath?: string | null;
+  photos: FormPhoto[];
+  previousPhotos: CatchPhotoRef[];
 }) {
   const id = opts.id ?? Crypto.randomUUID();
   const isNew = !opts.id;
   const now = new Date().toISOString();
 
-  let photoPath: string | undefined;
-  if (opts.photo) {
-    const tempUri = await compressPhoto(opts.photo.uri, opts.photo.width, opts.photo.height);
-    photoPath = photoPathFor(opts.userId, Crypto.randomUUID());
-    adoptPhoto(tempUri, photoPath);
+  // New photos (compressed at pick time) move into the photos dir under their storage key.
+  const photos: { id: string; path: string; isNew: boolean }[] = [];
+  for (const p of opts.photos) {
+    if (p.path) {
+      photos.push({ id: p.id, path: p.path, isNew: false });
+    } else if (p.uri) {
+      const path = photoPathFor(opts.userId, p.id);
+      adoptPhoto(p.uri, path);
+      photos.push({ id: p.id, path, isNew: true });
+    }
   }
+  const kept = new Set(photos.map((p) => p.path));
+  const removed = opts.previousPhotos.filter((p) => !kept.has(p.path));
+  const cover = photos[0]?.path ?? null;
 
   // What the server gets (Postgres types).
   const serverData: Record<string, unknown> = {
     ...Object.fromEntries(COLUMNS.map((c) => [c, opts.input[c] ?? null])),
     user_id: opts.userId,
-    ...(photoPath ? { photo_path: photoPath } : {}),
+    photo_path: cover,
   };
+  const photoRow = (p: { id: string; path: string }, position: number) => ({
+    catch_id: id, user_id: opts.userId, path: p.path, position,
+  });
 
   await writeLocal(
     async (txn) => {
@@ -158,44 +213,58 @@ export async function saveCatch(opts: {
         await txn.runAsync(
           `INSERT INTO catches (id, user_id, ${COLUMNS.join(', ')}, photo_path, created_at, updated_at)
            VALUES (?, ?, ${COLUMNS.map(() => '?').join(', ')}, ?, ?, ?)`,
-          [id, opts.userId, ...values, photoPath ?? null, now, now],
+          [id, opts.userId, ...values, cover, now, now],
         );
       } else {
         await txn.runAsync(
-          `UPDATE catches SET ${COLUMNS.map((c) => `${c} = ?`).join(', ')}${photoPath ? ', photo_path = ?' : ''},
-             updated_at = ? WHERE id = ?`,
-          [...values, ...(photoPath ? [photoPath] : []), now, id],
+          `UPDATE catches SET ${COLUMNS.map((c) => `${c} = ?`).join(', ')}, photo_path = ?, updated_at = ? WHERE id = ?`,
+          [...values, cover, now, id],
         );
       }
-      if (photoPath) {
+      for (const [i, p] of photos.entries()) {
         await txn.runAsync(
-          `INSERT OR REPLACE INTO photo_queue (path, action, attempts, next_try_at) VALUES (?, 'upload', 0, 0)`,
-          [photoPath],
+          `INSERT OR REPLACE INTO catch_photos (id, catch_id, user_id, path, position, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, coalesce((SELECT created_at FROM catch_photos WHERE id = ?), ?), ?)`,
+          [p.id, id, opts.userId, p.path, i, p.id, now, now],
         );
+        if (p.isNew) await txn.runAsync(queueSql, [p.path, 'upload']);
       }
-      if (photoPath && opts.previousPhotoPath) {
-        await txn.runAsync(
-          `INSERT OR REPLACE INTO photo_queue (path, action, attempts, next_try_at) VALUES (?, 'delete', 0, 0)`,
-          [opts.previousPhotoPath],
-        );
+      for (const p of removed) {
+        await txn.runAsync('DELETE FROM catch_photos WHERE id = ?', [p.id]);
+        await txn.runAsync(queueSql, [p.path, 'delete']);
       }
     },
-    [isNew ? { tbl: 'catches', op: 'upsert', id, data: serverData } : { tbl: 'catches', op: 'update', id, data: serverData }],
+    [
+      // The catch first: photo rows reference it.
+      isNew ? { tbl: 'catches', op: 'upsert', id, data: serverData } : { tbl: 'catches', op: 'update', id, data: serverData },
+      // Upserts (not updates) so a cover that never had a photo row gets one.
+      ...photos.map((p, i) => ({ tbl: 'catch_photos', op: 'upsert' as const, id: p.id, data: photoRow(p, i) })),
+      ...removed.map((p) => ({
+        tbl: 'catch_photos', op: 'upsert' as const, id: p.id, data: { ...photoRow(p, 0), deleted_at: now },
+      })),
+    ],
   );
-  if (photoPath && opts.previousPhotoPath) deleteLocalPhoto(opts.previousPhotoPath);
+  for (const p of removed) deleteLocalPhoto(p.path);
   return id;
 }
 
-/** Soft delete (a tombstone, so your other devices remove it too). */
-export async function deleteCatch(id: string, photoPath: string | null) {
+/** Soft delete (a tombstone, so your other devices remove it too), with its photos. */
+export async function deleteCatch(id: string) {
+  const row = await db.getFirstAsync<{ photo_path: string | null }>('SELECT photo_path FROM catches WHERE id = ?', [id]);
+  const rows = await db.getAllAsync<{ id: string; path: string }>('SELECT id, path FROM catch_photos WHERE catch_id = ?', [id]);
+  const paths = new Set([...rows.map((r) => r.path), ...(row?.photo_path ? [row.photo_path] : [])]);
+  const now = new Date().toISOString();
   await writeLocal(
     async (txn) => {
+      await txn.runAsync('DELETE FROM catch_photos WHERE catch_id = ?', [id]);
       await txn.runAsync('DELETE FROM catches WHERE id = ?', [id]);
+      for (const path of paths) await txn.runAsync(queueSql, [path, 'delete']);
     },
-    [{ tbl: 'catches', op: 'update', id, data: { deleted_at: new Date().toISOString() } }],
+    [
+      // Photo tombstones before the catch's: they need the catch still visible to pass RLS.
+      ...rows.map((r) => ({ tbl: 'catch_photos', op: 'update' as const, id: r.id, data: { deleted_at: now } })),
+      { tbl: 'catches', op: 'update', id, data: { deleted_at: now } },
+    ],
   );
-  if (photoPath) {
-    deleteLocalPhoto(photoPath);
-    await queuePhoto(photoPath, 'delete');
-  }
+  for (const path of paths) deleteLocalPhoto(path);
 }

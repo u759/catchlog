@@ -9,13 +9,14 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { bcAdapters } from './adapters/bc.ts';
+import { catchConditions, chsTideStations, ecccWaterStations } from './adapters/conditions.ts';
 import { fishbase } from './adapters/fishbase.ts';
 import { eoxSatelliteStyle } from './adapters/mapstyles.ts';
 import type { Adapter, AdapterState } from './adapters/types.ts';
 import { wikiSpecies } from './adapters/wiki.ts';
 
 const ADAPTERS: Record<string, Adapter> = Object.fromEntries(
-  [...bcAdapters, fishbase, wikiSpecies, eoxSatelliteStyle].map((a) => [a.key, a]),
+  [...bcAdapters, fishbase, wikiSpecies, eoxSatelliteStyle, chsTideStations, ecccWaterStations, catchConditions].map((a) => [a.key, a]),
 );
 const TIME_BUDGET_MS = 100_000; // well under the 150 s wall-clock limit
 const LOCK_STALE_MS = 5 * 60_000; // keep in sync with private.dispatch_sync_sources()

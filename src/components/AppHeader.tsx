@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { ArrowLeft, Trophy, User, X } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,6 +52,15 @@ export function AppHeader({ title, right, back }: { title?: string; right?: Reac
         )}
       </Pressable>
     </View>
+  );
+}
+
+/** A round icon button for a tab header's `right` slot, matching the leaderboard and profile buttons. */
+export function HeaderButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={[styles.iconButton, styles.round]}>
+      <Icon size={20} color={colors.text} />
+    </Pressable>
   );
 }
 

@@ -140,7 +140,7 @@ type Row = Record<string, unknown> & { id: string; updated_at: string; deleted_a
  * applies tombstones as local deletes, and skips rows that still have unsent local changes.
  */
 async function pullOwned(
-  table: 'catches' | 'gear' | 'spots',
+  table: 'catches' | 'gear' | 'spots' | 'catch_photos',
   userId: string,
   columns: string[],
   toLocal: (r: Row) => SQLiteBindValue[],
@@ -184,7 +184,7 @@ async function pullOwned(
 const CATCH_COLUMNS = [
   'id', 'user_id', 'species_id', 'species_other', 'length_mm', 'weight_g', 'weight_estimated', 'caught_at', 'lat', 'lng',
   'place_name', 'waterbody', 'lure', 'line_lb', 'notes', 'weather', 'photo_path', 'released', 'visibility', 'gear_id',
-  'waterbody_id', 'created_at', 'updated_at',
+  'waterbody_id', 'conditions', 'created_at', 'updated_at',
 ];
 
 const pullCatches = (userId: string) =>
@@ -195,7 +195,7 @@ const pullCatches = (userId: string) =>
     (r) =>
       CATCH_COLUMNS.map((c) => {
         const v = r[c];
-        if (c === 'weather') return v ? JSON.stringify(v) : null;
+        if (c === 'weather' || c === 'conditions') return v ? JSON.stringify(v) : null;
         if (c === 'weight_estimated' || c === 'released') return b(v);
         return (v ?? null) as SQLiteBindValue;
       }),
@@ -209,6 +209,18 @@ const pullCatches = (userId: string) =>
       }
     },
   );
+
+const PHOTO_COLUMNS = ['id', 'catch_id', 'user_id', 'path', 'position', 'created_at', 'updated_at'];
+const pullCatchPhotos = (userId: string) =>
+  pullOwned('catch_photos', userId, PHOTO_COLUMNS, plain(PHOTO_COLUMNS), async (rows, skip) => {
+    // Deleted photos: drop the local file. Missing files: queue a download (offline viewing).
+    for (const r of rows) {
+      const path = r.path as string;
+      if (!path || skip.has(r.id)) continue;
+      if (r.deleted_at) deleteLocalPhoto(path);
+      else if (!localPhotoFile(path).exists) await queuePhoto(path, 'download');
+    }
+  });
 
 const GEAR_COLUMNS = ['id', 'user_id', 'category', 'subtype', 'brand', 'name', 'color', 'size', 'weight_g', 'hook_size',
   'quantity', 'notes', 'created_at', 'updated_at'];
@@ -280,7 +292,7 @@ async function pullFriendships(userId: string) {
  *    (dropping local rows the server no longer has); else fetch only rows updated after our cursor.
  */
 type RefTable = {
-  table: 'species' | 'species_profiles' | 'waterbodies' | 'waterbody_species' | 'data_sources';
+  table: 'species' | 'species_profiles' | 'waterbodies' | 'waterbody_species' | 'data_sources' | 'lake_stations';
   select: string;
   order: string[]; // stable keyset: updated_at + primary key column(s)
   pk: string[];
@@ -362,15 +374,15 @@ const REFERENCE: RefTable[] = [
   },
   {
     table: 'waterbodies',
-    select: 'id, region, kind, name, area_ha, max_depth_m, mean_depth_m, depth_maps, lat, lng, bbox, updated_at',
+    select: 'id, region, kind, name, area_ha, max_depth_m, mean_depth_m, depth_maps, lat, lng, bbox, has_contours, updated_at',
     order: ['updated_at', 'id'],
     pk: ['id'],
     columns: ['id', 'region', 'kind', 'name', 'area_ha', 'max_depth_m', 'mean_depth_m', 'depth_maps', 'lat', 'lng',
-      'west', 'south', 'east', 'north', 'updated_at'],
+      'west', 'south', 'east', 'north', 'has_contours', 'updated_at'],
     toLocal: (w) => {
       const bb = (w.bbox as number[] | null) ?? [null, null, null, null];
       return [w.id, w.region, w.kind, w.name, w.area_ha, w.max_depth_m, w.mean_depth_m, json(w.depth_maps ?? []),
-        w.lat, w.lng, bb[0], bb[1], bb[2], bb[3], w.updated_at] as SQLiteBindValue[];
+        w.lat, w.lng, bb[0], bb[1], bb[2], bb[3], b(w.has_contours), w.updated_at] as SQLiteBindValue[];
     },
   },
   {
@@ -389,6 +401,14 @@ const REFERENCE: RefTable[] = [
     pk: ['key'],
     columns: ['key', 'name', 'used_for', 'licence', 'attribution', 'url', 'updated_at'],
     toLocal: (r) => [r.key, r.name, r.used_for, r.licence, r.attribution, r.url, r.updated_at] as SQLiteBindValue[],
+  },
+  {
+    table: 'lake_stations',
+    select: 'waterbody_id, station_number, name, updated_at',
+    order: ['updated_at', 'waterbody_id', 'station_number'],
+    pk: ['waterbody_id', 'station_number'],
+    columns: ['waterbody_id', 'station_number', 'name', 'updated_at'],
+    toLocal: (r) => [r.waterbody_id, r.station_number, r.name, r.updated_at] as SQLiteBindValue[],
   },
 ];
 
@@ -409,6 +429,7 @@ async function runOnce() {
     await pullCatches(userId);
     await pullOwned('gear', userId, GEAR_COLUMNS, plain(GEAR_COLUMNS));
     await pullOwned('spots', userId, SPOT_COLUMNS, plain(SPOT_COLUMNS));
+    await pullCatchPhotos(userId);
     await pullProfile();
     await pullFriendships(userId);
     for (const t of REFERENCE) await pullReference(t);

@@ -71,6 +71,29 @@ export function parseLureWeight(text: string, u: Units): number | null {
   return Math.round((u === 'imperial' ? n * G_PER_OZ : n) * 10) / 10;
 }
 
+/** Gauge water level (metres above the gauge's own datum, so only comparable at the same gauge). */
+export function formatLevel(m: number, u: Units): string {
+  return u === 'imperial' ? `${(m / M_PER_FT).toFixed(1)} ft` : `${m.toFixed(2)} m`;
+}
+
+/** Change in water level, signed: "+4 cm" / "−1.6 in". */
+export function formatLevelChange(dm: number, u: Units): string {
+  const v = u === 'imperial' ? (dm / M_PER_FT) * 12 : dm * 100;
+  const r = Math.abs(v) < 10 ? Math.round(v * 10) / 10 : Math.round(v);
+  return `${r > 0 ? '+' : r < 0 ? '−' : '±'}${Math.abs(r)} ${u === 'imperial' ? 'in' : 'cm'}`;
+}
+
+/** River flow (m³/s) for display: m³/s or ft³/s. */
+export function formatFlow(m3s: number, u: Units): string {
+  const v = u === 'imperial' ? m3s / M_PER_FT ** 3 : m3s;
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${u === 'imperial' ? 'ft³/s' : 'm³/s'}`;
+}
+
+/** Tide height (metres above chart datum). */
+export function formatTideHeight(m: number, u: Units): string {
+  return u === 'imperial' ? `${(m / M_PER_FT).toFixed(1)} ft` : `${m.toFixed(1)} m`;
+}
+
 /** Distance (metres) for display: m/km or ft/mi. */
 export function formatDistance(m: number, u: Units): string {
   if (u === 'imperial') {

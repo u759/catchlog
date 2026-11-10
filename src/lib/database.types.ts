@@ -39,9 +39,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      catch_photos: {
+        Row: {
+          catch_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          path: string
+          position: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          catch_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id: string
+          path: string
+          position?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          catch_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          path?: string
+          position?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catch_photos_catch_id_fkey"
+            columns: ["catch_id"]
+            isOneToOne: false
+            referencedRelation: "catches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catch_photos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catches: {
         Row: {
           caught_at: string
+          conditions: Json | null
+          conditions_at: string | null
           created_at: string
           deleted_at: string | null
           gear_id: string | null
@@ -68,6 +118,8 @@ export type Database = {
         }
         Insert: {
           caught_at?: string
+          conditions?: Json | null
+          conditions_at?: string | null
           created_at?: string
           deleted_at?: string | null
           gear_id?: string | null
@@ -94,6 +146,8 @@ export type Database = {
         }
         Update: {
           caught_at?: string
+          conditions?: Json | null
+          conditions_at?: string | null
           created_at?: string
           deleted_at?: string | null
           gear_id?: string | null
@@ -295,6 +349,42 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lake_stations: {
+        Row: {
+          name: string
+          station_number: string
+          updated_at: string
+          waterbody_id: string
+        }
+        Insert: {
+          name: string
+          station_number: string
+          updated_at?: string
+          waterbody_id: string
+        }
+        Update: {
+          name?: string
+          station_number?: string
+          updated_at?: string
+          waterbody_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lake_stations_station_number_fkey"
+            columns: ["station_number"]
+            isOneToOne: false
+            referencedRelation: "water_stations"
+            referencedColumns: ["station_number"]
+          },
+          {
+            foreignKeyName: "lake_stations_waterbody_id_fkey"
+            columns: ["waterbody_id"]
+            isOneToOne: false
+            referencedRelation: "waterbodies"
             referencedColumns: ["id"]
           },
         ]
@@ -578,6 +668,69 @@ export type Database = {
           },
         ]
       }
+      tide_stations: {
+        Row: {
+          code: string | null
+          geom: unknown
+          hilo_series: boolean
+          id: string
+          lat: number
+          lng: number
+          name: string
+          updated_at: string
+          wlp_series: boolean
+        }
+        Insert: {
+          code?: string | null
+          geom?: unknown
+          hilo_series?: boolean
+          id: string
+          lat: number
+          lng: number
+          name: string
+          updated_at?: string
+          wlp_series?: boolean
+        }
+        Update: {
+          code?: string | null
+          geom?: unknown
+          hilo_series?: boolean
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string
+          updated_at?: string
+          wlp_series?: boolean
+        }
+        Relationships: []
+      }
+      water_stations: {
+        Row: {
+          geom: unknown
+          lat: number
+          lng: number
+          name: string
+          station_number: string
+          updated_at: string
+        }
+        Insert: {
+          geom?: unknown
+          lat: number
+          lng: number
+          name: string
+          station_number: string
+          updated_at?: string
+        }
+        Update: {
+          geom?: unknown
+          lat?: number
+          lng?: number
+          name?: string
+          station_number?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       waterbodies: {
         Row: {
           area_ha: number | null
@@ -585,6 +738,7 @@ export type Database = {
           bbox: number[] | null
           depth_maps: Json
           geom: unknown
+          has_contours: boolean
           id: string
           kind: string
           lat: number | null
@@ -603,6 +757,7 @@ export type Database = {
           bbox?: number[] | null
           depth_maps?: Json
           geom?: unknown
+          has_contours?: boolean
           id?: string
           kind?: string
           lat?: number | null
@@ -621,6 +776,7 @@ export type Database = {
           bbox?: number[] | null
           depth_maps?: Json
           geom?: unknown
+          has_contours?: boolean
           id?: string
           kind?: string
           lat?: number | null
@@ -712,6 +868,16 @@ export type Database = {
     }
     Functions: {
       finalize_observations: { Args: { p_source: string }; Returns: number }
+      identify_cache_get: { Args: { p_sha256: string }; Returns: Json }
+      identify_cache_put: {
+        Args: { p_result: Json; p_sha256: string }
+        Returns: undefined
+      }
+      identify_claim: {
+        Args: { p_month_cap: number; p_user: string; p_user_day_cap: number }
+        Returns: number
+      }
+      identify_credits_left: { Args: { p_month_cap: number }; Returns: number }
       leaderboard: {
         Args: {
           p_limit?: number
@@ -752,13 +918,38 @@ export type Database = {
       }
       patch_species: { Args: { p_rows: Json }; Returns: number }
       patch_species_profiles: { Args: { p_rows: Json }; Returns: number }
+      pending_catch_conditions: {
+        Args: { p_limit?: number }
+        Returns: {
+          area_ha: number
+          caught_at: string
+          conditions: Json
+          id: string
+          lat: number
+          lng: number
+          tide_name: string
+          tide_station: string
+          water_name: string
+          water_station: string
+        }[]
+      }
       reference_version: { Args: { p_table: string }; Returns: string }
       replace_species_aliases: {
         Args: { p_rows: Json; p_type: string }
         Returns: number
       }
+      replace_tide_stations: { Args: { p_rows: Json }; Returns: number }
+      replace_water_stations: { Args: { p_rows: Json }; Returns: number }
       send_friend_request: { Args: { p_code: string }; Returns: Json }
+      set_catch_conditions: {
+        Args: { p_conditions: Json; p_id: string }
+        Returns: undefined
+      }
       set_species_wiki: { Args: { p_rows: Json }; Returns: number }
+      set_waterbody_contours: {
+        Args: { p_key_type: string; p_keys: string[] }
+        Returns: number
+      }
       set_waterbody_depth_maps: {
         Args: { p_licence: string; p_rows: Json; p_source: string }
         Returns: number

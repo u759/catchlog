@@ -17,10 +17,17 @@ export type Waterbody = {
   depth_maps: DepthMap[];
   lat: number;
   lng: number;
+  west: number | null;
+  south: number | null;
+  east: number | null;
+  north: number | null;
+  /** Digital depth contours exist for this lake (shown on the map when zoomed in). */
+  has_contours: boolean;
 };
 
 const toWaterbody = (r: Record<string, unknown>): Waterbody => ({
-  ...(r as Omit<Waterbody, 'depth_maps'>),
+  ...(r as Omit<Waterbody, 'depth_maps' | 'has_contours'>),
+  has_contours: !!r.has_contours,
   depth_maps: (() => {
     try {
       return JSON.parse(String(r.depth_maps ?? '[]')) as DepthMap[];

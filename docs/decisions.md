@@ -41,6 +41,7 @@ Store metric (`length_mm`, `weight_g`), convert for display. Catch and photo IDs
 
 ## Species ID: Fishial API only (2026-11-10)
 Edge Function calls Fishial Recognition API v2 (free plan: 100 credits/month, 1 credit per recognize). Only on explicit "Identify" tap, result cached per photo, monthly cap enforced server-side, user always confirms. No LLM fallback. Credentials live in Supabase secrets (`FISHIAL_CLIENT_ID`, `FISHIAL_CLIENT_SECRET`).
+Caps: 95 recognitions a month (5 kept spare), 15 per user per day; identical photos (SHA-256) come from `private.identify_cache` at no cost. Fishial names link to our species only through FishBase's scientific-name list; anything else is shown as Fishial's name, unlinked.
 **Rejected for now:** Claude vision fallback (user decision); self-hosting Fishial's open MIT models (352 MB classifier; needs a server outside Supabase or untested on-device conversion).
 
 ## Reference data is region-agnostic, filled by source adapters (2026-11-10)
@@ -57,13 +58,26 @@ Edge Function calls Fishial Recognition API v2 (free plan: 100 credits/month, 1 
 2. **Keep only useful lakes on the server:** named lakes plus lakes with depth or fish data (BC: 4,884 of 16,457 have data), and simplify outlines further. Keeps the database inside the free tier.
 
 ## Conditions are for the catch's time, not the upload's (2026-11-10)
-Weather is Open-Meteo for the hour of `caught_at` at the catch's coordinates: live weather is kept only when the catch is within the last hour; otherwise (or when an edit moves time/place) it's saved empty and `src/lib/sync/backfill.ts` fills weather and place name on the next online sync (forecast API for ~3 months back, archive API before; max 3 tries per catch). Moon/sun/solunar are computed from `caught_at` on display. Tides and water temperature (V2) must follow the same rule.
+Weather is Open-Meteo for the hour of `caught_at` at the catch's coordinates: live weather is kept only when the catch is within the last hour; otherwise (or when an edit moves time/place) it's saved empty and `src/lib/sync/backfill.ts` fills weather and place name on the next online sync (forecast API for ~3 months back, archive API before; max 3 tries per catch). Moon/sun/solunar are computed from `caught_at` on display.
+**Tide and water (2026-11-10):** after a catch uploads, the `catch-conditions` adapter (every 5 min, 8 catches per run) stores `catches.conditions` for `caught_at` at the catch's position. One rule per value:
+- **Tide:** catch not in a lake → nearest CHS station with predictions within 20 km (IWLS; predictions exist for any date): height, rising/falling, next high/low.
+- **Water temperature / level / flow:** a real-time ECCC gauge on the catch's lake (`lake_stations`: within 500 m of the outline), or, outside lakes, the nearest gauge within 2 km. Wateroffice keeps 30 days of real-time data, so older catches get none.
+- **Sea temperature:** catch near a tide station and no gauge temperature → NASA JPL MUR (~1 km, daily, 1–4 days late; retried until available). MUR masks inland lakes (NaN even for Williston/Okanagan), so it is never used for lakes.
+- Missing sources retry every 12 h for 7 days, then the catch keeps what it has. Only the server writes `conditions` (trigger `catches_keep_conditions`; a column REVOKE doesn't override table grants).
+**Not available:** lake water temperature away from gauges. No open source gives it per lake and day for BC (BC's EMS lake samples are sparse field visits, not a daily series), so the app shows nothing rather than a guess.
+**Water now (lake page):** the latest reading from the lake's gauge, fetched live from Wateroffice (online only, not stored).
 
 ## Map: MapLibre + OpenFreeMap (2026-11-10)
 `@maplibre/maplibre-react-native` v11 with OpenFreeMap's Liberty style. Catch pins clustered from local SQLite; saved spots are a synced, private table.
 **Saved areas:** "Save area" shows a square frame the user positions; it's sized so every area includes street-level detail (zoom 14) within OpenFreeMap's 3,000-tile cap (~70 × 70 km max). Each area is two packs sharing `metadata.group`: map (zoom 8–16) and satellite (zoom 8–14). Total offline maps capped at 300 MB. Limits live in `src/features/map/offline.ts`; Saved areas screen lists/deletes them.
 **Satellite (2026-11-10):** EOX Sentinel-2 cloudless 2025 (10 m/pixel, CC BY-NC-SA 4.0, free for non-commercial, no key) under Liberty's place/water/road labels. Offline packs need an HTTPS style URL, so the `eox-s2cloudless` adapter rebuilds the style monthly and publishes it to the public `map-styles` bucket. Satellite view stops at zoom 15 (only blur beyond).
 **Rejected:** Esri World Imagery and MapTiler Satellite (sharp, but API key and offline caching not allowed); BC government imagery (Access Only); EOX 2016 (allowed offline but old). EOX's FAQ ties offline packs to its paid licence while CC BY-NC-SA permits non-commercial copies; confirm with cloudless@eox.at before any wider release.
+
+## Lake depth contours (2026-11-10)
+BC Lake Bathymetric Maps (26 lakes, ~2.3 MB of contour polygons) are **Access Only**, so they aren't copied to our server: the phone downloads them straight from the BC WFS into a file (refreshed monthly) and the map draws them from zoom 11. The server stores only which lakes have them (`waterbodies.has_contours`, `bc-lake-contours` adapter, linked by BC's published WSA lake identifier like the other BC sources). Captioned "Not for navigation".
+
+## Several photos per catch (2026-11-10)
+`catch_photos` (device-generated ids, file `{user_id}/{id}.jpg`, `position`, soft deletes) holds up to 6 photos; `catches.photo_path` stays the cover (first photo) so the leaderboard, Logbook rows and friends' lists need no join. Photos are compressed when picked, so "Identify" and the upload send the same bytes. Camera first: the camera tab opens the camera, then the form; cancelling still opens the form.
 
 ## Photos compressed on device (2026-11-10)
 ≤ 1440 px, JPEG 72% (~150–250 KB) before upload; bucket rejects files > 5 MB. Keeps the 1 GB free storage good for several thousand catches.

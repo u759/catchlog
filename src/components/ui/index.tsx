@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react-native';
-import { Check, ChevronDown, ChevronRight, X } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronRight, Search, X } from 'lucide-react-native';
 import {
   Children,
   type ComponentRef,
@@ -448,6 +448,27 @@ export function Field({ label, suffix, onFocus, onBlur, ...props }: TextInputPro
   );
 }
 
+// ── SearchField: a search box (magnifier, no caption label) for filtering a list in place. ──
+export function SearchField({
+  accessibilityLabel,
+  ...props
+}: Omit<TextInputProps, 'style'> & { accessibilityLabel: string }) {
+  return (
+    <View style={styles.search}>
+      <Search size={18} color={colors.textMuted} />
+      <TextInput
+        placeholderTextColor={colors.textMuted}
+        style={styles.searchInput}
+        autoCorrect={false}
+        clearButtonMode="while-editing"
+        returnKeyType="search"
+        accessibilityLabel={accessibilityLabel}
+        {...props}
+      />
+    </View>
+  );
+}
+
 // ── EmptyState ────────────────────────────────────────────────────────────
 export function EmptyState({ icon: Icon, title, body, action }: { icon: LucideIcon; title: string; body: string; action?: ReactNode }) {
   return (
@@ -463,6 +484,11 @@ export function EmptyState({ icon: Icon, title, body, action }: { icon: LucideIc
 }
 
 const styles = StyleSheet.create({
+  search: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.surface, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.borderStrong, paddingHorizontal: space.md, minHeight: touch,
+  },
+  searchInput: { ...type.body, flex: 1, paddingVertical: space.sm },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg },
   button: {
     minHeight: 52,

@@ -1,3 +1,4 @@
+import { type CatchConditions, parseConditions } from '@/features/conditions/model';
 import type { Weather } from '@/features/weather/openMeteo';
 import { isWeather } from '@/features/weather/openMeteo';
 
@@ -20,14 +21,24 @@ export type CatchView = {
   line_lb: number | null;
   notes: string | null;
   weather: Weather | null;
+  /** Tide/water at catch time, filled by the server after upload (null until then, or if no station applies). */
+  conditions: CatchConditions | null;
   photo_path: string | null;
   gear_id: string | null;
   waterbody_id: string | null;
   /** Signed URL, only for catches fetched from the server (friends'). */
   photo_url?: string | null;
+  /** All photos with signed URLs, only for catches fetched from the server (own ones come from local catch_photos). */
+  photos?: CatchPhotoRef[];
   released: boolean;
   visibility: 'private' | 'friends' | 'public';
 };
+
+/** One photo of a catch: storage path (also the local file name) and, for server reads, a signed URL. */
+export type CatchPhotoRef = { id: string; path: string; url?: string | null };
+
+/** Photo id = the file name in "{user_id}/{photoId}.jpg". */
+export const photoIdFromPath = (path: string) => path.split('/').pop()!.replace(/\.jpg$/, '');
 
 /** Timestamps synced from Postgres use a space ("2026-11-10 03:18:27Z"); Hermes only parses ISO "T". */
 export const parseTs = (s: string) => new Date(s.includes('T') ? s : s.replace(' ', 'T'));
@@ -76,6 +87,7 @@ export function fromLocal(r: LocalCatchRow): CatchView {
     line_lb: (r.line_lb as number) ?? null,
     notes: (r.notes as string) ?? null,
     weather: parseWeather(r.weather),
+    conditions: parseConditions(r.conditions),
     photo_path: (r.photo_path as string) ?? null,
     gear_id: (r.gear_id as string) ?? null,
     waterbody_id: (r.waterbody_id as string) ?? null,

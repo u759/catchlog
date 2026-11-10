@@ -108,6 +108,29 @@ export const bcDepthMaps: Adapter = {
   },
 };
 
+/**
+ * BC Lake Bathymetric Maps: which lakes have digital depth contours (26 lakes). Only the lake identifiers are read;
+ * the contours are Access Only, so the phone fetches them straight from the WFS (src/features/map/contours.ts).
+ */
+export const bcLakeContours: Adapter = {
+  key: 'bc-lake-contours',
+  async step(db) {
+    const res = await fetchWithRetry(
+      wfsUrl({
+        typeName: 'pub:WHSE_FISH.BATH_LAKE_BATHYMETRIC_SP',
+        outputFormat: 'application/json',
+        propertyName: 'LAKE_WSA_WATERBODY_IDENTIFIER',
+      }),
+    );
+    const features = ((await res.json()) as { features: { properties: { LAKE_WSA_WATERBODY_IDENTIFIER: string | null } }[] })
+      .features;
+    const keys = [...new Set(features.map((f) => f.properties.LAKE_WSA_WATERBODY_IDENTIFIER?.trim()).filter(Boolean))];
+    if (!keys.length) throw new Error('no lakes in the bathymetry layer');
+    const changed = await rpc(db, 'set_waterbody_contours', { p_key_type: KEY_50K, p_keys: keys });
+    return { state: {}, done: true, rows: changed };
+  },
+};
+
 /** Known BC Fish Observations (lakes): which species have been recorded in each lake (~139k rows). */
 export const bcFishObservations: Adapter = {
   key: 'bc-fish-observations',
@@ -212,4 +235,4 @@ export const bcFishCodes: Adapter = {
   },
 };
 
-export const bcAdapters = [bcLakes, bcLakeSurveys, bcDepthMaps, bcFishCodes, bcFishObservations];
+export const bcAdapters = [bcLakes, bcLakeSurveys, bcDepthMaps, bcLakeContours, bcFishCodes, bcFishObservations];

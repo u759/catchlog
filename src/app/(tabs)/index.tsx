@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
-import { CloudOff, CloudUpload, Fish } from 'lucide-react-native';
+import { CloudOff, CloudUpload, Fish, Search, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HeaderButton } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
-import { Badge, Button, Card, EmptyState, Facts, listItemLayout, Segmented } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Facts, listItemLayout, SearchField, Segmented } from '@/components/ui';
 import {
   type LogbookFilter,
   refreshSync,
@@ -47,12 +47,21 @@ export default function Logbook() {
   const units = useUnits();
   const [filter, setFilter] = useState<LogbookFilter>('all');
   const [limit, setLimit] = useState(PAGE);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchActive = searching && query.trim().length > 0;
   // All reads are local SQLite (works offline). The list pages in PAGE rows at a time.
-  const { catches: rows, isLoading } = useLogbook(filter, limit);
+  const { catches: rows, isLoading } = useLogbook(filter, limit, searching ? query : '');
   const stats = useLogbookStats();
   const best = useBestCatch();
   // With a single catch, the personal-best card already shows it; don't repeat it as a "Recent" row.
-  const catches = filter === 'all' && best && rows.length === 1 && rows[0].id === best.id ? [] : rows;
+  const catches = !searchActive && filter === 'all' && best && rows.length === 1 && rows[0].id === best.id ? [] : rows;
+
+  const toggleSearch = () => {
+    setSearching((s) => !s);
+    setQuery('');
+    setLimit(PAGE);
+  };
   const sync = usePendingUploads();
 
   const changeFilter = (f: LogbookFilter) => {
@@ -60,7 +69,25 @@ export default function Logbook() {
     setLimit(PAGE);
   };
 
-  const header = (
+  const header = searching ? (
+    <View style={{ gap: space.lg }}>
+      <SearchField
+        placeholder="Fish, lake, lure or notes"
+        value={query}
+        onChangeText={(t) => {
+          setQuery(t);
+          setLimit(PAGE);
+        }}
+        autoFocus
+        accessibilityLabel="Search your catches"
+      />
+      {searchActive && catches.length > 0 && (
+        <Text style={type.headline} accessibilityRole="header">
+          {catches.length >= limit ? `${limit}+ catches` : `${catches.length} catch${catches.length > 1 ? 'es' : ''}`}
+        </Text>
+      )}
+    </View>
+  ) : (
     <View style={{ gap: space.lg }}>
       {stats.total > 0 && (
         <Facts
@@ -97,7 +124,18 @@ export default function Logbook() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <AppHeader title="Logbook" />
+      <AppHeader
+        title="Logbook"
+        right={
+          stats.total > 0 || searching ? (
+            <HeaderButton
+              icon={searching ? X : Search}
+              label={searching ? 'Close search' : 'Search your catches'}
+              onPress={toggleSearch}
+            />
+          ) : null
+        }
+      />
       <Animated.FlatList
         data={catches}
         itemLayoutAnimation={listItemLayout}
@@ -115,14 +153,20 @@ export default function Logbook() {
         )}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
-          if (filter !== 'trophies' && catches.length >= limit) setLimit((l) => l + PAGE);
+          if ((searching || filter !== 'trophies') && catches.length >= limit) setLimit((l) => l + PAGE);
         }}
         initialNumToRender={12}
         maxToRenderPerBatch={10}
         windowSize={9}
         removeClippedSubviews
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={
-          isLoading || (!sync.hasSynced && sync.connected) ? (
+          searching ? (
+            searchActive && !isLoading ? (
+              <Text style={[type.secondary, { textAlign: 'center', padding: space.xl }]}>No catches match “{query.trim()}”.</Text>
+            ) : undefined
+          ) : isLoading || (!sync.hasSynced && sync.connected) ? (
             <View style={{ padding: space.xl, alignItems: 'center', gap: space.sm }}>
               <ActivityIndicator color={colors.primary} />
               <Text style={type.secondary}>Downloading your logbook…</Text>

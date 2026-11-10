@@ -23,6 +23,8 @@ import {
   MAP_STYLE_URL, MAP_VIEW_MAX_ZOOM, MAX_OFFLINE_BYTES, maxHalfSpan, MIN_DETAIL_ZOOM, offlineBytes, PACK_MIN_ZOOM, packMaxZoom, SATELLITE_MAX_ZOOM,
   SATELLITE_STYLE_URL, SATELLITE_VIEW_MAX_ZOOM, squareBounds,
 } from '@/features/map/offline';
+import { CONTOUR_MIN_ZOOM, CONTOUR_NO_DEPTH, useContoursUri } from '@/features/map/contours';
+import { useUnits } from '@/features/profile/hooks';
 import { useSpots } from '@/features/spots/hooks';
 import { useTip } from '@/features/tips';
 import { parseTs } from '@/features/catches/model';
@@ -48,6 +50,8 @@ export default function MapTab() {
   const userId = useUserId() ?? '';
   const camera = useRef<CameraRef>(null);
   const catchSource = useRef<GeoJSONSourceRef>(null);
+  const contours = useContoursUri();
+  const units = useUnits();
   const [view, setView] = useState<ViewState | null>(null);
   const [start, setStart] = useState<[number, number] | null>(null);
   const [range, setRange] = useState<Range>('all');
@@ -304,6 +308,30 @@ export default function MapTab() {
               <Layer id="lake-outline" type="line"
                 paint={{ 'line-color': satellite ? colors.surface : colors.primary, 'line-opacity': satellite ? 0.7 : 0.4, 'line-width': 1.25 }} />
             </GeoJSONSource>
+            {contours ? (
+              // Depth contours (26 BC lakes): nested depth polygons, so stacked faint fills darken with depth.
+              <GeoJSONSource id="contours" data={contours}>
+                <Layer id="contour-fill" type="fill" minzoom={CONTOUR_MIN_ZOOM}
+                  filter={['<', ['get', 'CONTOUR_DEPTH_M'], CONTOUR_NO_DEPTH]}
+                  paint={{ 'fill-color': colors.primary, 'fill-opacity': satellite ? 0.08 : 0.05 }} />
+                <Layer id="contour-lines" type="line" minzoom={CONTOUR_MIN_ZOOM}
+                  filter={['<', ['get', 'CONTOUR_DEPTH_M'], CONTOUR_NO_DEPTH]}
+                  paint={{ 'line-color': satellite ? colors.surface : colors.primary, 'line-opacity': 0.5, 'line-width': 0.75 }} />
+                <Layer id="contour-labels" type="symbol" minzoom={CONTOUR_MIN_ZOOM + 2}
+                  filter={['all', ['>', ['get', 'CONTOUR_DEPTH_M'], 0], ['<', ['get', 'CONTOUR_DEPTH_M'], CONTOUR_NO_DEPTH]]}
+                  layout={{
+                    'symbol-placement': 'line',
+                    'symbol-spacing': 300,
+                    'text-field': units === 'imperial'
+                      ? ['concat', ['to-string', ['round', ['*', ['get', 'CONTOUR_DEPTH_M'], 3.28084]]], ' ft']
+                      : ['concat', ['to-string', ['get', 'CONTOUR_DEPTH_M']], ' m'],
+                    'text-size': 11,
+                    'text-font': ['Noto Sans Regular'],
+                  }}
+                  paint={{ 'text-color': satellite ? colors.surface : colors.primary,
+                    'text-halo-color': satellite ? colors.text : colors.surface, 'text-halo-width': 1.25 }} />
+              </GeoJSONSource>
+            ) : null}
             <GeoJSONSource
               id="catches"
               ref={catchSource}
@@ -457,6 +485,9 @@ export default function MapTab() {
               <Row label="Saved areas" sub="Use the map without signal" onPress={() => close(() => router.push('/offline-areas'))} />
               <Row label="Save an area" sub="Pick part of the map to keep" onPress={() => close(startSelecting)} />
             </Group>
+            <Text style={type.caption}>
+              Depth contours for 26 BC lakes show when you zoom in. Not for navigation.
+            </Text>
             <Text style={type.caption}>
               {satellite
                 ? 'Satellite: EOxCloudless 2025 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2025)'

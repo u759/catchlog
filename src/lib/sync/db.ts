@@ -120,6 +120,26 @@ const MIGRATIONS: string[] = [
     key TEXT PRIMARY KEY NOT NULL, name TEXT, used_for TEXT, licence TEXT, attribution TEXT, url TEXT, updated_at TEXT
   );
   `,
+  // v5: conditions at catch time, several photos per catch, gauges on lakes.
+  `
+  ALTER TABLE catches ADD COLUMN conditions TEXT;
+  CREATE TABLE catch_photos (
+    id TEXT PRIMARY KEY NOT NULL, catch_id TEXT NOT NULL, user_id TEXT NOT NULL, path TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0, created_at TEXT, updated_at TEXT
+  );
+  CREATE INDEX catch_photos_catch ON catch_photos (catch_id, position);
+  CREATE TABLE lake_stations (
+    waterbody_id TEXT NOT NULL, station_number TEXT NOT NULL, name TEXT, updated_at TEXT,
+    PRIMARY KEY (waterbody_id, station_number)
+  );
+  -- New column: refetch own catches on the next sync.
+  DELETE FROM sync_state WHERE key = 'cursor:catches';
+  `,
+  // v6: lakes with digital depth contours (the contours themselves are fetched to a file, see map/contours.ts).
+  `
+  ALTER TABLE waterbodies ADD COLUMN has_contours INTEGER NOT NULL DEFAULT 0;
+  DELETE FROM sync_state WHERE key IN ('ref:waterbodies:cursor', 'ref:waterbodies:version');
+  `,
 ];
 
 let ready: Promise<void> | null = null;
@@ -193,7 +213,8 @@ export async function wipeLocalData() {
   await initDb();
   await transaction(async (tx) => {
     for (const t of ['catches', 'profiles', 'friendships', 'species', 'species_profiles', 'waterbodies',
-      'waterbody_species', 'data_sources', 'gear', 'spots', 'outbox', 'photo_queue', 'sync_state']) {
+      'waterbody_species', 'data_sources', 'lake_stations', 'gear', 'spots', 'catch_photos', 'outbox', 'photo_queue',
+      'sync_state']) {
       await tx.runAsync(`DELETE FROM ${t} WHERE 1`);
     }
   });

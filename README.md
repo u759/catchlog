@@ -60,7 +60,8 @@ The FishBase licence is non-commercial. Selling the app would need permission fr
 
 | Job | Schedule | What |
 |---|---|---|
-| `sync-sources` (pg_cron → Edge Function) | every minute | Calls the function once per due source: BC lakes (180 d), lake depths + depth maps (90 d), fish observations (30 d), FishBase (checked monthly), Wikipedia summaries + Commons photos (30 d), satellite map style (30 d). Progress in `public.data_sources`. |
+| `sync-sources` (pg_cron → Edge Function) | every minute | Calls the function once per due source: BC lakes (180 d), lake depths + depth maps (90 d), which lakes have depth contours (30 d), fish observations (30 d), FishBase (checked monthly), Wikipedia summaries + Commons photos (30 d), satellite map style (30 d), CHS tide stations and ECCC water gauges (30 d), and conditions at catch time for new catches (every 5 min). Progress in `public.data_sources`. |
+| `identify` (Edge Function, on demand) | when a user taps "Identify from photo" | Fishial.ai species suggestions for one photo; cached per photo; capped at 95 a month (free plan: 100) and 15 per user per day. |
 
 Secrets: `CRON_SECRET` (function secret + Vault `sync_sources_cron_secret`), `FISHIAL_CLIENT_ID/SECRET`.
 
@@ -77,5 +78,4 @@ plugins/          config plugin for release signing
 
 ## TODO
 
-- Fish ID from photo (Edge Function + vision model)
 - Share catch as image

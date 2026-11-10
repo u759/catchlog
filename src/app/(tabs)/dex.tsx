@@ -1,12 +1,12 @@
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { Fish, Search } from 'lucide-react-native';
+import { Fish } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
-import { Badge, Dropdown, EmptyState } from '@/components/ui';
+import { Badge, Dropdown, EmptyState, SearchField } from '@/components/ui';
 import { localPhotoUri } from '@/features/catches/photos';
 import { environmentLabel } from '@/features/collection/fishbaseLabels';
 import { usePendingUploads } from '@/features/catches/hooks';
@@ -135,19 +135,7 @@ export default function Dex() {
               <Text style={[type.secondary, { color: colors.text }]}>Connect once to see which fish live in your lakes.</Text>
             )}
             <View style={styles.row}>
-              <View style={styles.search}>
-                <Search size={18} color={colors.textMuted} />
-                <TextInput
-                  placeholder="Name or number"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.searchInput}
-                  value={query}
-                  onChangeText={setQuery}
-                  autoCorrect={false}
-                  accessibilityLabel="Search species"
-                  clearButtonMode="while-editing"
-                />
-              </View>
+              <SearchField placeholder="Name or number" value={query} onChangeText={setQuery} accessibilityLabel="Search species" />
               {groupsPresent.length > 1 && (
                 <Dropdown
                   accessibilityLabel="Family"
@@ -217,11 +205,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   bar: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 3 },
-  search: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.surface, borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.borderStrong, paddingHorizontal: space.md, minHeight: 44,
-  },
-  searchInput: { ...type.body, flex: 1, paddingVertical: space.sm },
   card: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, gap: 2 },
   imageBox: {
     aspectRatio: 4 / 3, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, overflow: 'hidden', alignItems: 'center',

@@ -1,9 +1,9 @@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import * as ImagePicker from 'expo-image-picker';
+import * as Crypto from 'expo-crypto';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Calendar, Camera, Fish, ImagePlus } from 'lucide-react-native';
+import { Calendar, Camera, Fish, ImagePlus, ScanSearch } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,8 +22,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ModalHeader } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Button, Chip, EmptyState, Field, Group, Row, Segmented } from '@/components/ui';
-import { saveCatch, useCatch, useUserId } from '@/features/catches/hooks';
-import { type CatchView, parseTs } from '@/features/catches/model';
+import {
+  type FormPhoto,
+  MAX_PHOTOS,
+  saveCatch,
+  useCatch,
+  useCatchPhotos,
+  usePendingUploads,
+  useUserId,
+} from '@/features/catches/hooks';
+import { identifyFish, type IdResult } from '@/features/catches/identify';
+import { type CatchPhotoRef, type CatchView, parseTs } from '@/features/catches/model';
+import { localPhotoUri, pickCatchPhotos } from '@/features/catches/photos';
 import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { useGearList } from '@/features/gear/hooks';
 import { isLure } from '@/features/gear/taxonomy';
@@ -49,8 +59,10 @@ import {
   weightUnit,
 } from '@/utils/units';
 
-type Picked = { uri: string; width: number; height: number };
 type Visibility = 'private' | 'friends' | 'public';
+/** An ID result and the photo it was for (a new cover photo hides the old result). */
+type ShownId = IdResult & { photoId: string };
+const percent = (x: number) => `${Math.round(x * 100)}%`;
 
 /**
  * Weather to save with a catch. Live weather only describes catches within the last hour; for anything else (or an
@@ -69,12 +81,16 @@ function weatherForSave(
   return Math.abs(Date.now() - caughtAt.getTime()) <= 60 * 60_000 ? weather : null;
 }
 
-/** /catch/new = log a catch; /catch/new?id=… = edit that catch; /catch/new?lake=… = log a catch at that lake. */
+/**
+ * /catch/new = log a catch; ?id=… = edit that catch; ?lake=… = log a catch at that lake;
+ * ?photo=… = start with this (compressed) photo, from the camera-first tab button.
+ */
 export default function CatchFormScreen() {
-  const { id, lake: lakeId } = useLocalSearchParams<{ id?: string; lake?: string }>();
+  const { id, lake: lakeId, photo } = useLocalSearchParams<{ id?: string; lake?: string; photo?: string }>();
   const { data: existing, isLoading } = useCatch(id);
+  const { photos: existingPhotos, isLoading: photosLoading } = useCatchPhotos(id ? existing : null);
   const presetLake = useWaterbody(id ? undefined : lakeId);
-  if (!id && lakeId && !presetLake) {
+  if ((!id && lakeId && !presetLake) || (id && existing && photosLoading)) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
   if (id && !existing) {
@@ -88,10 +104,27 @@ export default function CatchFormScreen() {
       </View>
     );
   }
-  return <CatchForm existing={id ? existing : undefined} presetLake={id ? null : presetLake} />;
+  return (
+    <CatchForm
+      existing={id ? existing : undefined}
+      presetLake={id ? null : presetLake}
+      initialPhotos={id ? existingPhotos : []}
+      cameraPhoto={id ? undefined : photo}
+    />
+  );
 }
 
-function CatchForm({ existing, presetLake }: { existing?: CatchView | null; presetLake: Waterbody | null }) {
+function CatchForm({
+  existing,
+  presetLake,
+  initialPhotos,
+  cameraPhoto,
+}: {
+  existing?: CatchView | null;
+  presetLake: Waterbody | null;
+  initialPhotos: CatchPhotoRef[];
+  cameraPhoto?: string;
+}) {
   const lakeId = presetLake?.id;
   const isEdit = !!existing;
   const insets = useSafeAreaInsets();
@@ -100,7 +133,14 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
   const speciesIndex = useSpeciesIndex();
 
   // Initial values come from the catch being edited (if any), read once at mount.
-  const [photo, setPhoto] = useState<Picked | null>(null);
+  const [photos, setPhotos] = useState<FormPhoto[]>(() =>
+    cameraPhoto ? [{ id: Crypto.randomUUID(), uri: cameraPhoto }] : initialPhotos.map((p) => ({ id: p.id, path: p.path })),
+  );
+  const [adding, setAdding] = useState(false);
+  const [idResult, setIdResult] = useState<ShownId | null>(null);
+  const [idError, setIdError] = useState<string | null>(null);
+  const [identifying, setIdentifying] = useState(false);
+  const sync = usePendingUploads();
   const [speciesText, setSpeciesText] = useState(existing?.species?.common_name ?? existing?.species_other ?? '');
   const [speciesId, setSpeciesId] = useState<string | null>(existing?.species_id ?? null);
   const [length, setLength] = useState(existing?.length_mm ? formatLength(existing.length_mm, units) : '');
@@ -214,15 +254,42 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
     lengthMm != null && selectedSpecies?.max_length_mm != null && lengthMm > selectedSpecies.max_length_mm;
 
   async function pickPhoto(source: 'camera' | 'library') {
-    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1 };
-    if (source === 'camera') {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) return Alert.alert('Camera access is off', 'Enable it in Settings to take catch photos.');
+    setAdding(true);
+    try {
+      const r = await pickCatchPhotos(source, MAX_PHOTOS - photos.length);
+      if (r === 'denied') return Alert.alert('Camera access is off', 'Turn it on in Settings to take catch photos.');
+      if (r === 'no-camera') return Alert.alert('No camera on this device', 'Choose a photo from your library instead.');
+      setPhotos((cur) => [...cur, ...r.map((p) => ({ id: Crypto.randomUUID(), uri: p.uri }))].slice(0, MAX_PHOTOS));
+    } finally {
+      setAdding(false);
     }
-    const res =
-      source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-    const a = res.assets?.[0];
-    if (!res.canceled && a) setPhoto({ uri: a.uri, width: a.width, height: a.height });
+  }
+
+  function photoActions(p: FormPhoto, index: number) {
+    Alert.alert('Photo', undefined, [
+      ...(index > 0
+        ? [{ text: 'Make cover photo', onPress: () => setPhotos((cur) => [p, ...cur.filter((x) => x.id !== p.id)]) }]
+        : []),
+      { text: 'Remove', style: 'destructive' as const, onPress: () => setPhotos((cur) => cur.filter((x) => x.id !== p.id)) },
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  }
+
+  // Fishial identifies the cover photo (the same compressed JPEG that gets uploaded).
+  const cover = photos[0];
+  const coverUri = cover ? (cover.uri ?? localPhotoUri(cover.path)) : null;
+  const shownId = idResult && idResult.photoId === cover?.id ? idResult : null;
+  async function identify() {
+    if (!coverUri || !cover) return;
+    setIdentifying(true);
+    setIdError(null);
+    try {
+      setIdResult({ ...(await identifyFish(coverUri)), photoId: cover.id });
+    } catch (e) {
+      setIdError(e instanceof Error ? e.message : 'Fish ID is unavailable right now. Try again later.');
+    } finally {
+      setIdentifying(false);
+    }
   }
 
   function openAndroidDateTime() {
@@ -253,8 +320,8 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
       await saveCatch({
         id: existing?.id,
         userId,
-        photo,
-        previousPhotoPath: photo ? existing?.photo_path : null,
+        photos,
+        previousPhotos: initialPhotos,
         input: {
           species_id: speciesId,
           species_other: speciesId ? null : speciesText.trim(),
@@ -291,21 +358,39 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
       <ModalHeader title={isEdit ? 'Edit catch' : 'Log a catch'} />
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        {/* Photo */}
-        {photo || existing?.photo_path ? (
-          <View style={styles.photoBox}>
-            {photo ? (
-              <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} contentFit="cover" accessibilityLabel="Catch photo" />
-            ) : (
-              <CatchPhoto photoPath={existing!.photo_path} photoUrl={existing!.photo_url} style={StyleSheet.absoluteFill} />
+        {/* Photos: the cover large, the rest as thumbnails. Tap one to make it the cover or remove it. */}
+        {cover ? (
+          <View style={{ gap: space.sm }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cover photo, options"
+              onPress={() => photoActions(cover, 0)}
+              style={styles.photoBox}>
+              <FormThumb photo={cover} />
+            </Pressable>
+            {photos.length > 1 && (
+              <View style={styles.thumbs}>
+                {photos.slice(1).map((p, i) => (
+                  <Pressable
+                    key={p.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Photo ${i + 2}, options`}
+                    onPress={() => photoActions(p, i + 1)}
+                    style={({ pressed }) => [styles.thumb, pressed && { opacity: 0.6 }]}>
+                    <FormThumb photo={p} />
+                  </Pressable>
+                ))}
+              </View>
             )}
           </View>
         ) : null}
         <View style={styles.photoActions}>
-          <Button label={photo || existing?.photo_path ? 'Retake' : 'Take photo'} icon={Camera} variant="secondary"
-            onPress={() => pickPhoto('camera')} style={{ flex: 1 }} />
-          <Button label="Library" icon={ImagePlus} variant="secondary" onPress={() => pickPhoto('library')} style={{ flex: 1 }} />
+          <Button label="Take photo" icon={Camera} variant="secondary" onPress={() => pickPhoto('camera')}
+            disabled={photos.length >= MAX_PHOTOS} loading={adding} style={{ flex: 1 }} />
+          <Button label="Library" icon={ImagePlus} variant="secondary" onPress={() => pickPhoto('library')}
+            disabled={photos.length >= MAX_PHOTOS || adding} style={{ flex: 1 }} />
         </View>
+        {photos.length >= MAX_PHOTOS && <Text style={type.secondary}>That’s the most photos for one catch ({MAX_PHOTOS}).</Text>}
 
         {/* Species */}
         <View style={{ gap: space.sm }}>
@@ -322,6 +407,57 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
               setSpeciesId(exact?.id ?? null);
             }}
           />
+          {coverUri && !shownId && (
+            <Button
+              label={sync.connected ? 'Identify from photo' : 'Identify needs signal'}
+              icon={ScanSearch}
+              variant="text"
+              onPress={identify}
+              loading={identifying}
+              disabled={!sync.connected}
+              style={{ alignSelf: 'flex-start', marginLeft: -space.md }}
+            />
+          )}
+          {idError && !identifying ? <Text style={[type.secondary, { color: colors.danger }]}>{idError}</Text> : null}
+          {shownId && (
+            <View style={{ gap: space.sm }}>
+              {shownId.candidates.length + shownId.unmatched.length > 0 ? (
+                <View style={styles.chips}>
+                  {shownId.candidates.map((s) => (
+                    <Chip
+                      key={s.species_id}
+                      label={`${s.common_name} · ${percent(s.certainty)}`}
+                      selected={s.species_id === speciesId}
+                      onPress={() => {
+                        setSpeciesId(s.species_id);
+                        setSpeciesText(speciesIndex.byId.get(s.species_id)?.common_name ?? s.common_name);
+                      }}
+                    />
+                  ))}
+                  {shownId.unmatched.map((s) => (
+                    <Chip
+                      key={s.name}
+                      label={`${s.name} · ${percent(s.certainty)}`}
+                      selected={!speciesId && speciesText === s.name}
+                      onPress={() => {
+                        setSpeciesId(null);
+                        setSpeciesText(s.name);
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text style={type.secondary}>
+                  {shownId.fish_found ? 'Couldn’t tell which fish this is.' : 'No fish found in this photo.'}
+                </Text>
+              )}
+              <Text style={type.caption}>
+                {['Suggested by Fishial.ai', shownId.credits_left != null && `${shownId.credits_left} IDs left this month`]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+          )}
           {suggestions.length > 0 && (
             <View style={styles.chips}>
               {suggestions.map((s) => (
@@ -473,6 +609,15 @@ function CatchForm({ existing, presetLake }: { existing?: CatchView | null; pres
   );
 }
 
+/** A form photo: a new one from its compressed temp file, an existing one from the phone (or a signed URL). */
+function FormThumb({ photo }: { photo: FormPhoto }) {
+  return photo.uri ? (
+    <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+  ) : (
+    <CatchPhoto photoPath={photo.path} style={StyleSheet.absoluteFill} />
+  );
+}
+
 const styles = StyleSheet.create({
   body: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
   photoBox: {
@@ -482,6 +627,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   photoActions: { flexDirection: 'row', gap: space.sm },
+  thumbs: { flexDirection: 'row', gap: space.sm },
+  thumb: { width: 64, height: 64, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surfaceAlt },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   row: { flexDirection: 'row', gap: space.md },
   inlineCard: {

@@ -226,9 +226,19 @@ A catch, a species or a saved area as one tappable thing: Surface, 16px corners,
 
 ### Inputs / Fields
 Caption label above, Surface field with Outline edge, 12px corners, 48px tall, Body text, unit as a Caption suffix. Focus: Forest edge.
+**Search field:** the same Surface box, 44px, with a muted magnifier and no caption label; filters the list under it as you type. The Logbook opens it from a round header button (magnifier, X to close); the Dex shows it inline.
 
 ### Navigation
-Bottom tab bar with four sections (Logbook, Dex, Map, Gear) and the camera action in the centre as a Forest circle (44px) without a label. Active tab: Forest icon and label; inactive: Ink muted.
+Bottom tab bar with four sections (Logbook, Dex, Map, Gear) and the camera action in the centre as a Forest circle (44px) without a label. It opens the camera first, then the Log a catch form with the photo (cancelling still opens the form). Active tab: Forest icon and label; inactive: Ink muted. Tab headers put extra actions in round Sunken buttons (`HeaderButton`) beside the leaderboard and profile buttons.
+
+### Photos
+A catch's cover photo leads its screen at 4:3 with 16px corners. With several photos it swipes sideways one at a time, with small page dots under it (the current dot stretches into a Forest bar, 160ms). In the form the cover shows large and the others as 64px thumbnails; tapping any photo offers "Make cover photo" or "Remove". Up to 6 per catch.
+
+### Fish ID
+"Identify from photo" is a Text button under the Species field, only when there is a photo, disabled offline ("Identify needs signal"). Suggestions appear as Chips with the certainty ("Rainbow Trout · 84%"); tapping one fills the species, nothing is chosen automatically. A Caption credits Fishial.ai and shows the IDs left this month.
+
+### Conditions rows
+Catch conditions are rows in one Group: weather, wind, air pressure, then tide ("Rising, 3.5 m", next high/low and station as the subtitle), water temperature, level and flow (the gauge named once, under the last), sea temperature ("Satellite, daily average"), moon, sun, solunar. A row appears only when its value exists. The lake page's "Water now" uses the same rows with the gauge and reading time in the Caption under the group.
 
 ### Badge
 Lime pill with Deep Moss caption text (600): "Personal best", "Caught 3×", a Dex card's catch count. The only place lime appears.
@@ -246,7 +256,7 @@ A filter choice that stays in context: the button shows the current value with a
 A one-time hint on Surface with a hairline edge: Secondary text and a Forest "Got it". Dismissed tips stay dismissed on the phone. One tip per screen at most.
 
 ### Map controls
-Map floats sit over imagery with the Map float shadow. Top: one Surface panel holding the date-range Segmented control and the species Dropdown. Bottom-left: the Forest "Save area" pill. Bottom-right: Layers (opens the Map sheet: Map / Satellite, Saved areas, Save an area) above Locate. Everything stays clear of the map attribution in the bottom corners. Lakes we have data for get a faint Forest outline (the 300 biggest lakes in view at any zoom; zooming in reveals smaller ones) (white on satellite) and a 5% tint so they read as tappable; one tap opens the lake. Taps resolve in order: catch pins, saved spots, then the smallest lake under the finger. Long-press still saves a spot.
+Map floats sit over imagery with the Map float shadow. Top: one Surface panel holding the date-range Segmented control and the species Dropdown. Bottom-left: the Forest "Save area" pill. Bottom-right: Layers (opens the Map sheet: Map / Satellite, Saved areas, Save an area) above Locate. Everything stays clear of the map attribution in the bottom corners. Lakes we have data for get a faint Forest outline (the 300 biggest lakes in view at any zoom; zooming in reveals smaller ones) (white on satellite) and a 5% tint so they read as tappable; one tap opens the lake. Taps resolve in order: catch pins, saved spots, then the smallest lake under the finger. Long-press still saves a spot. Lakes with digital depth contours show them from zoom 11: faint Forest fills that stack darker with depth, thin Forest lines (white on satellite) and depth labels along the lines from zoom 13, in the user's units.
 
 ### Empty states
 Icon in a Sunken circle, Headline title, Secondary explanation, then one action.
