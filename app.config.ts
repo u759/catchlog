@@ -1,4 +1,9 @@
+import { loadProjectEnv } from '@expo/env';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+
+// Expo CLI loads .env itself, but EAS CLI evaluates this file without it; load it here so every tool sees the
+// same EXPO_PUBLIC_* values (e.g. the Google iOS URL scheme below).
+loadProjectEnv(__dirname, { silent: true });
 
 const BUNDLE_ID = 'com.catchlog.catchlog';
 
@@ -64,6 +69,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     '@maplibre/maplibre-react-native',
     './plugins/withReleaseSigning',
   ],
+  extra: {
+    eas: { projectId: 'd4de49d0-f6d3-4bf9-926a-72f8aee72f25' },
+  },
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
