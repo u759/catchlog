@@ -7,6 +7,7 @@ import {
 import type { Session } from '@supabase/supabase-js';
 import { createContext, type PropsWithChildren, useContext, useEffect, useState } from 'react';
 
+import { startSync, stopSyncAndWipe } from './sync/engine';
 import { queryClient } from './queryClient';
 import { supabase } from './supabase';
 
@@ -35,6 +36,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  // Start background sync whenever someone is signed in (works offline from the cached session).
+  const userId = state.session?.user.id;
+  useEffect(() => {
+    if (userId) startSync(userId).catch((e: unknown) => console.warn('[sync] start failed', e));
+  }, [userId]);
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }
@@ -80,7 +87,9 @@ export async function verifyEmailCode(email: string, code: string): Promise<stri
   return error ? error.message : null;
 }
 
+/** Wipes this user's local database + photos, then signs out. Unsynced changes are lost. */
 export async function signOut() {
+  await stopSyncAndWipe().catch((e: unknown) => console.warn('[sync] wipe failed', e));
   await Promise.allSettled([GoogleSignin.signOut(), supabase.auth.signOut()]);
-  queryClient.clear(); // don't leave one user's catches cached for the next
+  queryClient.clear(); // don't leave one user's data cached for the next
 }

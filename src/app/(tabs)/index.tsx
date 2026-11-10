@@ -1,66 +1,64 @@
-import { useIsMutating } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { ChevronRight, CirclePlus, CloudUpload, Fish, History, MapPin, Star } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ChevronRight, CirclePlus, CloudOff, CloudUpload, Fish, History, MapPin, Star } from 'lucide-react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Button, Card, Chip, EmptyState, StatTile } from '@/components/ui';
-import type { Catch } from '@/features/catches/api';
-import { useMyCatches } from '@/features/catches/hooks';
+import {
+  type LogbookFilter,
+  refreshSync,
+  useBestCatch,
+  useLogbook,
+  useLogbookStats,
+  usePendingUploads,
+} from '@/features/catches/hooks';
+import { type CatchView, parseTs, speciesLabel } from '@/features/catches/model';
 import { useUnits } from '@/features/profile/hooks';
-import { MUTATION_SAVE_CATCH } from '@/lib/queryClient';
 import { colors, radius, space, type } from '@/theme';
 import { formatLength, formatWeight, lengthUnit, type Units, weightUnit } from '@/utils/units';
 
-type Filter = 'all' | 'today' | 'trophies';
-
-const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
-const speciesName = (c: Catch) => c.species?.common_name ?? c.species_other ?? 'Unknown species';
+const PAGE = 30;
 
 function whenLabel(iso: string) {
-  const d = new Date(iso);
-  if (isToday(iso)) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const d = parseTs(iso);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setDate(today.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 export default function Logbook() {
   const units = useUnits();
-  const { data: catches = [], isRefetching, refetch } = useMyCatches();
-  const pendingSync = useIsMutating({ mutationKey: MUTATION_SAVE_CATCH });
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<LogbookFilter>('all');
+  const [limit, setLimit] = useState(PAGE);
+  // All reads are local SQLite (works offline). The list pages in PAGE rows at a time.
+  const { catches, isLoading } = useLogbook(filter, limit);
+  const stats = useLogbookStats();
+  const best = useBestCatch();
+  const sync = usePendingUploads();
 
-  const stats = useMemo(
-    () => ({
-      total: catches.length,
-      today: catches.filter((c) => isToday(c.caught_at)).length,
-      weight: catches.reduce((sum, c) => sum + (c.weight_g ?? 0), 0),
-      best: catches.reduce<Catch | undefined>(
-        (best, c) => ((c.length_mm ?? 0) > (best?.length_mm ?? 0) ? c : best),
-        undefined,
-      ),
-    }),
-    [catches],
-  );
-
-  const visible = useMemo(() => {
-    if (filter === 'today') return catches.filter((c) => isToday(c.caught_at));
-    if (filter === 'trophies')
-      return [...catches].filter((c) => c.length_mm).sort((a, b) => b.length_mm! - a.length_mm!).slice(0, 10);
-    return catches;
-  }, [catches, filter]);
+  const changeFilter = (f: LogbookFilter) => {
+    setFilter(f);
+    setLimit(PAGE);
+  };
 
   const header = (
     <View style={{ gap: space.lg }}>
-      {pendingSync > 0 && (
+      {sync.count > 0 && (
         <View style={styles.syncBanner}>
-          <CloudUpload size={16} color={colors.onAccent} />
+          {sync.connected ? (
+            <CloudUpload size={16} color={colors.onAccent} />
+          ) : (
+            <CloudOff size={16} color={colors.onAccent} />
+          )}
           <Text style={styles.syncText}>
-            {pendingSync} catch{pendingSync > 1 ? 'es' : ''} waiting for signal to sync
+            {sync.connected
+              ? `Syncing ${sync.count} change${sync.count > 1 ? 's' : ''}…`
+              : `${sync.count} change${sync.count > 1 ? 's' : ''} saved offline. Will sync when you’re back online.`}
           </Text>
         </View>
       )}
@@ -68,16 +66,16 @@ export default function Logbook() {
       <View style={styles.statsRow}>
         <StatTile label="Total caught" value={String(stats.total)} unit="fish" />
         <StatTile label="Today" value={`+${stats.today}`} unit="fresh" />
-        <StatTile label="Total weight" value={formatWeight(stats.weight, units)} unit={weightUnit(units)} />
+        <StatTile label="Total weight" value={formatWeight(stats.weight ?? 0, units)} unit={weightUnit(units)} />
       </View>
 
       <View style={styles.chips}>
-        <Chip label="All Species" selected={filter === 'all'} onPress={() => setFilter('all')} />
-        <Chip label="Today" selected={filter === 'today'} onPress={() => setFilter('today')} />
-        <Chip label="★ Trophies" selected={filter === 'trophies'} onPress={() => setFilter('trophies')} />
+        <Chip label="All Species" selected={filter === 'all'} onPress={() => changeFilter('all')} />
+        <Chip label="Today" selected={filter === 'today'} onPress={() => changeFilter('today')} />
+        <Chip label="★ Trophies" selected={filter === 'trophies'} onPress={() => changeFilter('trophies')} />
       </View>
 
-      {stats.best && filter === 'all' && <FeaturedCatch c={stats.best} units={units} />}
+      {best && filter === 'all' && <FeaturedCatch c={best} units={units} />}
 
       {catches.length > 0 && (
         <View style={styles.sectionTitle}>
@@ -92,14 +90,29 @@ export default function Logbook() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader title="Logbook" />
       <FlatList
-        data={visible}
+        data={catches}
         keyExtractor={(c) => c.id}
         renderItem={({ item }) => <CatchRow c={item} units={units} />}
         ListHeaderComponent={header}
         ListHeaderComponentStyle={{ marginBottom: space.md }}
         ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (filter !== 'trophies' && catches.length >= limit) setLimit((l) => l + PAGE);
+        }}
         ListEmptyComponent={
-          catches.length === 0 ? (
+          isLoading || (!sync.hasSynced && sync.connected) ? (
+            <View style={{ padding: space.xl, alignItems: 'center', gap: space.sm }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={type.muted}>Downloading your logbook…</Text>
+            </View>
+          ) : !sync.hasSynced && stats.total === 0 ? (
+            <EmptyState
+              icon={CloudOff}
+              title="Waiting for a connection"
+              body="Connect to the internet once to download your logbook. You can still log new catches now. They'll sync later."
+            />
+          ) : stats.total === 0 ? (
             <EmptyState
               icon={Fish}
               title="No catches yet"
@@ -118,13 +131,13 @@ export default function Logbook() {
           />
         }
         contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()}tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={sync.syncing} onRefresh={refreshSync} tintColor={colors.primary} />}
       />
     </View>
   );
 }
 
-function FeaturedCatch({ c, units }: { c: Catch; units: Units }) {
+function FeaturedCatch({ c, units }: { c: CatchView; units: Units }) {
   return (
     <View style={{ gap: space.sm }}>
       <View style={styles.sectionTitle}>
@@ -135,14 +148,14 @@ function FeaturedCatch({ c, units }: { c: Catch; units: Units }) {
       <Card style={{ gap: space.md }}>
         <View style={{ flexDirection: 'row', gap: space.md }}>
           <View>
-            <CatchPhoto catchId={c.id} photoPath={c.photo_path} photoUrl={c.photo_url} style={styles.featuredPhoto} />
+            <CatchPhoto photoPath={c.photo_path} style={styles.featuredPhoto} />
             <View style={styles.bestBadge}>
               <Text style={styles.bestText}>BEST</Text>
             </View>
           </View>
           <View style={{ flex: 1, gap: space.sm }}>
             <Text style={type.heading} numberOfLines={2}>
-              {speciesName(c)}
+              {speciesLabel(c)}
             </Text>
             {(c.place_name || c.waterbody) && (
               <View style={styles.inline}>
@@ -181,20 +194,19 @@ function MiniStat({ label, value, unit }: { label: string; value: string; unit: 
   );
 }
 
-function CatchRow({ c, units }: { c: Catch; units: Units }) {
+function CatchRow({ c, units }: { c: CatchView; units: Units }) {
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/catch/[id]', params: { id: c.id } })}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]}>
-      <CatchPhoto catchId={c.id} photoPath={c.photo_path} photoUrl={c.photo_url} style={styles.rowPhoto} iconSize={22} />
+      <CatchPhoto photoPath={c.photo_path} style={styles.rowPhoto} iconSize={22} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.rowTitle} numberOfLines={1}>
-          {speciesName(c)}
+          {speciesLabel(c)}
         </Text>
         <Text style={type.muted} numberOfLines={1}>
           {[c.waterbody ?? c.place_name, whenLabel(c.caught_at)].filter(Boolean).join(' • ')}
         </Text>
-        {c._pending && <Text style={styles.pending}>Waiting to sync</Text>}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.rowWeight}>
@@ -221,7 +233,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: space.md,
   },
-  syncText: { color: colors.onAccent, fontWeight: '600', fontSize: 13 },
+  syncText: { color: colors.onAccent, fontWeight: '600', fontSize: 13, flex: 1 },
   featuredPhoto: { width: 120, height: 120, borderRadius: radius.md },
   bestBadge: {
     position: 'absolute',
@@ -247,5 +259,4 @@ const styles = StyleSheet.create({
   rowPhoto: { width: 56, height: 56, borderRadius: radius.sm },
   rowTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   rowWeight: { fontSize: 18, fontWeight: '800', color: colors.text },
-  pending: { fontSize: 12, fontWeight: '600', color: colors.onGold },
 });

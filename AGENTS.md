@@ -42,9 +42,17 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ## CatchLog project notes
 
+Read `docs/decisions.md` first: it records what we chose, what we rejected, and why. Don't undo a decision there without asking.
+
 - Backend is Supabase project `ouqcqcyialpvibrldtyl` (MCP server in `.mcp.json`, scoped to that project only).
-- Schema lives in `supabase/migrations/`. Apply changes as a new migration (MCP `apply_migration`), save the SQL with the same version prefix, then regenerate `src/lib/database.types.ts`.
+- Schema lives in `supabase/migrations/`. Add a migration file, apply with `npx supabase db push --remote` (the MCP auto-declines destructive SQL in this setup), then regenerate types with `npx supabase gen types typescript --linked > src/lib/database.types.ts`. Run ad-hoc SQL with `npx supabase db query --remote -f file.sql`.
+- Profiles: `friend_code`/`units` are column-restricted; read your own via `rpc('my_profile')`. Friend requests only via `rpc('send_friend_request')`.
 - New tables are NOT auto-exposed: every table needs explicit `GRANT`s to `authenticated` plus RLS policies. Run the security advisor after DDL.
 - Measurements are stored metric (`length_mm`, `weight_g`); convert only for display via `src/utils/units.ts`.
-- Catch IDs are generated on the device; writes go through the persisted offline queue in `src/lib/queryClient.ts` (`setMutationDefaults`), never inline `mutationFn`s.
+- Catch and photo IDs are generated on the device (idempotent upserts).
 - Run `npm run typecheck` and `npm run lint` before declaring work done.
+- Data layer: own data is local SQLite (`expo-sqlite`) synced by `src/lib/sync/engine.ts`. Read with `useLiveQuery(sql, params, tables)`; write with `writeLocal(apply, outboxOps)` so the local change and its upload are queued atomically. Don't add TanStack Query for synced tables; use it only for online server reads (leaderboard, other users' catches).
+- Synced tables need a server-stamped `updated_at` (trigger `before insert or update`) and soft deletes (`deleted_at`) unless they're small enough to refresh in full. Add a pull function in the engine and a table in the local migrations (`src/lib/sync/db.ts`; append a new migration, never edit an old one).
+- Clients re-download a row only when its server `updated_at` changes. A migration that changes data without touching rows (e.g. a column type change) must also `update <table> set updated_at = now()`. A local migration that adds a column must also `DELETE FROM sync_state WHERE key = 'cursor:<table>'` so the next sync refetches everything.
+- Timestamps come back from Supabase as ISO with "+00:00"; local writes use "Z". Parse with `parseTs`, compare/order with `julianday()` in SQL.
+- Lists that can grow must page (local: growing `LIMIT`; server: `.range()` / RPC limit+offset with `useInfiniteQuery`).

@@ -6,24 +6,20 @@ import { localPhotoUri } from '@/features/catches/photos';
 import { colors } from '@/theme';
 
 type Props = {
-  catchId: string;
   photoPath?: string | null;
+  /** Signed URL, for catches fetched from the server (friends'). */
   photoUrl?: string | null;
   style?: ImageStyle;
   iconSize?: number;
 };
 
 /**
- * Prefers the on-device copy (works offline + for unsynced catches), then the signed URL.
- * cacheKey = storage path, so expo-image's disk cache survives signed-URL rotation.
+ * Prefers the on-device copy kept by the sync photo queue (works offline), then a signed
+ * URL. cacheKey = storage path, so expo-image's disk cache survives signed-URL rotation.
  */
-export function CatchPhoto({ catchId, photoPath, photoUrl, style, iconSize = 28 }: Props) {
-  const local = localPhotoUri(catchId);
-  const source = local
-    ? { uri: local }
-    : photoUrl
-      ? { uri: photoUrl, cacheKey: photoPath ?? undefined }
-      : null;
+export function CatchPhoto({ photoPath, photoUrl, style, iconSize = 28 }: Props) {
+  const local = localPhotoUri(photoPath ?? null);
+  const source = local ? { uri: local } : photoUrl ? { uri: photoUrl, cacheKey: photoPath ?? undefined } : null;
 
   if (!source) {
     return (
@@ -33,14 +29,7 @@ export function CatchPhoto({ catchId, photoPath, photoUrl, style, iconSize = 28 
     );
   }
   return (
-    <Image
-      source={source}
-      style={[styles.image, style]}
-      contentFit="cover"
-      // Local files can be overwritten on edit (same path), so don't cache them.
-      cachePolicy={local ? 'none' : 'disk'}
-      transition={150}
-    />
+    <Image source={source} style={[styles.image, style]} contentFit="cover" cachePolicy="memory-disk" transition={150} />
   );
 }
 

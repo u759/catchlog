@@ -12,11 +12,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{ persister, maxAge: persistMaxAge }}
-      // After restoring from disk, push any catches that were logged offline.
-      onSuccess={() => queryClient.resumePausedMutations().then(() => queryClient.invalidateQueries())}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: persistMaxAge }}>
       <AuthProvider>
         <StatusBar style="dark" />
         <RootNavigator />

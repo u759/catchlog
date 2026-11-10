@@ -33,13 +33,13 @@ export function parseWeight(text: string, u: Units): number | null {
 }
 
 /**
- * Standard-weight estimate: log10(W g) = a + b·log10(L mm).
+ * Length-weight estimate (FishBase): log10(W g) = a + b·log10(L mm).
  * Returns null when the species has no coefficients.
  */
 export function estimateWeightG(
   lengthMm: number | null,
-  species: { ws_a: number | null; ws_b: number | null } | undefined,
+  species: { lw_a: number | null; lw_b: number | null } | undefined,
 ): number | null {
-  if (!lengthMm || species?.ws_a == null || species?.ws_b == null) return null;
-  return Math.round(10 ** (species.ws_a + species.ws_b * Math.log10(lengthMm)));
+  if (!lengthMm || species?.lw_a == null || species?.lw_b == null) return null;
+  return Math.round(10 ** (species.lw_a + species.lw_b * Math.log10(lengthMm)));
 }

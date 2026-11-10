@@ -1,6 +1,14 @@
 # CatchLog
 
-Fishing catch logger. Expo (React Native) + Supabase. Works offline and syncs when back online.
+Fishing catch logger. Expo (React Native) + Supabase. Offline-first: the app reads and writes a local SQLite database and syncs it with Supabase in the background. No other services.
+
+## How sync works (`src/lib/sync`)
+
+- **Writes** go to local SQLite plus an `outbox` row in the same transaction, then upload in order via supabase-js when online (RLS applies). Network errors retry; permanent rejections are dropped and the row is re-pulled.
+- **Pulls** fetch rows with `updated_at` newer than a per-table cursor (minus a 60s overlap), paged by `(updated_at, id)`. The server stamps `updated_at`. Deleted catches are tombstones (`deleted_at`). Friendships refresh in full (small). Species check a row count, then only changed rows.
+- **Photos** are queued in `photo_queue` and streamed to/from Supabase Storage with backoff. Your photos are downloaded for offline viewing.
+- Runs on sign-in, app foreground, reconnect, after local writes, every 5 minutes, and on pull-to-refresh. Signing out wipes the local copy.
+- **Online only** (TanStack Query): leaderboard (paginated), other anglers' catches, adding a friend by code.
 
 ## Run
 
@@ -37,6 +45,15 @@ Supabase's Google provider "Client IDs" field lists all of them, Web first.
 Schema, RLS policies and seed data are in `supabase/migrations/`. To change the schema: add a migration, apply it, regenerate `src/lib/database.types.ts`. New tables need explicit `GRANT`s to `authenticated` plus RLS policies. They aren't exposed by default.
 
 Lengths and weights are stored in mm and g. `src/utils/units.ts` converts for display.
+
+## Species data
+
+The `species` table has every fish species in Canada (1,395) plus a few US ones from the first seed. It's built by `scripts/build-species-seed.py` from:
+
+- [Wild Species 2020](https://www.canada.ca/en/environment-climate-change/services/species-risk-public-registry/general-status/wild-species-2020.html) (Canadian Endangered Species Conservation Council, 2022): species list, provinces/oceans, national status rank. The file has no common names for fishes.
+- [FishBase](https://www.fishbase.se) v26.06 (CC BY-NC 4.0, non-commercial): English/French names (AFS official names first), length-weight coefficients, max length, freshwater/saltwater flags, game-fish flag.
+
+The FishBase licence is non-commercial. Selling the app would need permission from FishBase.
 
 ## Layout
 

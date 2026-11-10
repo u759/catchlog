@@ -5,10 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Button, Card, EmptyState, InfoPill, Section, StatTile } from '@/components/ui';
-import { useCatch, useDeleteCatch, useUserId } from '@/features/catches/hooks';
-import { deleteLocalPhoto } from '@/features/catches/photos';
+import { deleteCatch, useCatch, useUserId } from '@/features/catches/hooks';
+import { parseTs, speciesLabel } from '@/features/catches/model';
 import { useUnits } from '@/features/profile/hooks';
-import { formatTemp, formatWind, isWeather, weatherLabel } from '@/features/weather/openMeteo';
+import { formatTemp, formatWind, weatherLabel } from '@/features/weather/openMeteo';
 import { colors, radius, space, type } from '@/theme';
 import { formatLength, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
 
@@ -18,7 +18,6 @@ export default function CatchDetails() {
   const units = useUnits();
   const userId = useUserId();
   const { data: c, isLoading } = useCatch(id);
-  const del = useDeleteCatch();
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + space.sm }]}>
@@ -46,8 +45,8 @@ export default function CatchDetails() {
     );
   }
 
-  const caught = new Date(c.caught_at);
-  const weather = isWeather(c.weather) ? c.weather : null;
+  const caught = parseTs(c.caught_at);
+  const weather = c.weather;
   const mine = c.user_id === userId;
 
   const confirmDelete = () =>
@@ -57,8 +56,7 @@ export default function CatchDetails() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          del.mutate({ id: c.id, userId: c.user_id });
-          deleteLocalPhoto(c.id);
+          deleteCatch(c.id, c.photo_path).catch((e) => Alert.alert('Could not delete', String(e)));
           router.back();
         },
       },
@@ -68,10 +66,18 @@ export default function CatchDetails() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {header}
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={type.title}>{c.species?.common_name ?? c.species_other ?? 'Unknown species'}</Text>
+        <View style={{ gap: 2 }}>
+          <Text style={type.title}>{speciesLabel(c)}</Text>
+          {c.species?.scientific_name && (
+            <Text style={type.muted}>
+              <Text style={{ fontStyle: 'italic' }}>{c.species.scientific_name}</Text>
+              {c.species.common_name_fr ? ` · ${c.species.common_name_fr}` : ''}
+            </Text>
+          )}
+        </View>
 
         <Card style={{ padding: 0, overflow: 'hidden' }}>
-          <CatchPhoto catchId={c.id} photoPath={c.photo_path} photoUrl={c.photo_url} style={styles.photo} iconSize={48} />
+          <CatchPhoto photoPath={c.photo_path} photoUrl={c.photo_url} style={styles.photo} iconSize={48} />
           <View style={{ padding: space.lg, gap: space.xs }}>
             {(c.waterbody || c.place_name) && (
               <View style={styles.inline}>
@@ -86,7 +92,6 @@ export default function CatchDetails() {
                 {caught.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </Text>
             </View>
-            {c._pending && <Text style={styles.pending}>Waiting for signal to sync</Text>}
           </View>
         </Card>
 
@@ -165,5 +170,4 @@ const styles = StyleSheet.create({
     padding: space.md,
   },
   notes: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: space.lg },
-  pending: { fontSize: 12, fontWeight: '600', color: colors.onGold, marginTop: space.xs },
 });

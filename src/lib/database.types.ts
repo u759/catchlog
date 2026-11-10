@@ -1,5 +1,4 @@
-// Generated from the Supabase schema. Regenerate after migrations (ask Claude, or
-// `npx supabase gen types typescript --project-id ouqcqcyialpvibrldtyl > src/lib/database.types.ts`).
+// Generated from the Supabase schema: npx supabase gen types typescript --linked > src/lib/database.types.ts
 export type Json =
   | string
   | number
@@ -13,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.18"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -110,18 +134,21 @@ export type Database = {
         Row: {
           addressee_id: string
           created_at: string
+          id: string
           requester_id: string
           status: string
         }
         Insert: {
           addressee_id: string
           created_at?: string
+          id?: string
           requester_id: string
           status?: string
         }
         Update: {
           addressee_id?: string
           created_at?: string
+          id?: string
           requester_id?: string
           status?: string
         }
@@ -174,28 +201,73 @@ export type Database = {
       }
       species: {
         Row: {
+          brackish: boolean | null
           common_name: string
+          common_name_fr: string | null
           family: string | null
+          fishbase_id: number | null
+          freshwater: boolean | null
+          game_fish: boolean
           id: string
+          in_canada: boolean
+          lw_a: number | null
+          lw_b: number | null
+          lw_method: string | null
+          max_length_mm: number | null
+          national_rank: string | null
+          native_to_canada: boolean | null
+          order_name: string | null
+          regions: string[]
+          saltwater: boolean | null
           scientific_name: string | null
-          ws_a: number | null
-          ws_b: number | null
+          updated_at: string
+          wild_species_code: string | null
         }
         Insert: {
+          brackish?: boolean | null
           common_name: string
+          common_name_fr?: string | null
           family?: string | null
+          fishbase_id?: number | null
+          freshwater?: boolean | null
+          game_fish?: boolean
           id: string
+          in_canada?: boolean
+          lw_a?: number | null
+          lw_b?: number | null
+          lw_method?: string | null
+          max_length_mm?: number | null
+          national_rank?: string | null
+          native_to_canada?: boolean | null
+          order_name?: string | null
+          regions?: string[]
+          saltwater?: boolean | null
           scientific_name?: string | null
-          ws_a?: number | null
-          ws_b?: number | null
+          updated_at?: string
+          wild_species_code?: string | null
         }
         Update: {
+          brackish?: boolean | null
           common_name?: string
+          common_name_fr?: string | null
           family?: string | null
+          fishbase_id?: number | null
+          freshwater?: boolean | null
+          game_fish?: boolean
           id?: string
+          in_canada?: boolean
+          lw_a?: number | null
+          lw_b?: number | null
+          lw_method?: string | null
+          max_length_mm?: number | null
+          national_rank?: string | null
+          native_to_canada?: boolean | null
+          order_name?: string | null
+          regions?: string[]
+          saltwater?: boolean | null
           scientific_name?: string | null
-          ws_a?: number | null
-          ws_b?: number | null
+          updated_at?: string
+          wild_species_code?: string | null
         }
         Relationships: []
       }
@@ -205,7 +277,12 @@ export type Database = {
     }
     Functions: {
       leaderboard: {
-        Args: { p_since?: string; p_species_id?: string }
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_since?: string
+          p_species_id?: string
+        }
         Returns: {
           avatar_url: string
           catch_id: string
@@ -219,6 +296,26 @@ export type Database = {
           weight_g: number
         }[]
       }
+      my_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          friend_code: string
+          id: string
+          units: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      send_friend_request: { Args: { p_code: string }; Returns: Json }
+      species_version: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -311,3 +408,46 @@ export type TablesUpdate<
       ? U
       : never
     : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {},
+  },
+} as const

@@ -1,5 +1,4 @@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
@@ -22,9 +21,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Button, Chip, EmptyState, Field, InfoPill } from '@/components/ui';
-import type { Catch, CatchDraft } from '@/features/catches/api';
-import { useCatch, useSaveCatch, useSpecies, useUserId } from '@/features/catches/hooks';
-import { storeCatchPhoto } from '@/features/catches/photos';
+import { saveCatch, useCatch, useUserId } from '@/features/catches/hooks';
+import { type CatchView, parseTs } from '@/features/catches/model';
+import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
 import { useUnits } from '@/features/profile/hooks';
 import {
   fetchCurrentWeather,
@@ -34,7 +33,6 @@ import {
   type Weather,
   weatherLabel,
 } from '@/features/weather/openMeteo';
-import type { Json } from '@/lib/database.types';
 import { colors, radius, space, type } from '@/theme';
 import {
   estimateWeightG,
@@ -67,16 +65,14 @@ export default function CatchFormScreen() {
   return <CatchForm existing={id ? existing : undefined} />;
 }
 
-function CatchForm({ existing }: { existing?: Catch | null }) {
+function CatchForm({ existing }: { existing?: CatchView | null }) {
   const isEdit = !!existing;
   const insets = useSafeAreaInsets();
   const userId = useUserId();
   const units = useUnits();
-  const { data: species = [] } = useSpecies();
-  const save = useSaveCatch();
+  const speciesIndex = useSpeciesIndex();
 
   // Initial values come from the catch being edited (if any), read once at mount.
-  const [catchId] = useState(() => existing?.id ?? Crypto.randomUUID());
   const [photo, setPhoto] = useState<Picked | null>(null);
   const [speciesText, setSpeciesText] = useState(existing?.species?.common_name ?? existing?.species_other ?? '');
   const [speciesId, setSpeciesId] = useState<string | null>(existing?.species_id ?? null);
@@ -84,7 +80,7 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
   const [weight, setWeight] = useState(
     existing?.weight_g && !existing.weight_estimated ? formatWeight(existing.weight_g, units) : '',
   );
-  const [caughtAt, setCaughtAt] = useState(() => (existing ? new Date(existing.caught_at) : new Date()));
+  const [caughtAt, setCaughtAt] = useState(() => (existing ? parseTs(existing.caught_at) : new Date()));
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     existing?.lat != null && existing.lng != null ? { lat: existing.lat, lng: existing.lng } : null,
   );
@@ -98,6 +94,7 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
   const [released, setReleased] = useState(existing?.released ?? true);
   const [visibility, setVisibility] = useState<Visibility>((existing?.visibility as Visibility) ?? 'friends');
   const [saving, setSaving] = useState(false);
+  const [regions, setRegions] = useState<string[]>([]); // province codes, for species suggestions
 
   // New catch: grab GPS (works offline), then best-effort place name + weather (need signal).
   useEffect(() => {
@@ -114,9 +111,14 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
         const { latitude: lat, longitude: lng } = pos.coords;
         setCoords({ lat, lng });
         const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }).catch(() => []);
-        if (!cancelled && place) setPlaceName([place.city ?? place.subregion, place.region].filter(Boolean).join(', '));
+        if (!cancelled && place) {
+          setPlaceName([place.city ?? place.subregion, place.region].filter(Boolean).join(', '));
+          setRegions(regionCodes(place.region, place.isoCountryCode));
+        }
         const w = await fetchCurrentWeather(lat, lng);
         if (!cancelled && w) setWeather(w);
+      } catch {
+        // No GPS fix (indoors, simulator without a location): leave location empty.
       } finally {
         if (!cancelled) setLocating(false);
       }
@@ -126,15 +128,16 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
     };
   }, [isEdit]);
 
-  const selectedSpecies = species.find((s) => s.id === speciesId);
+  const selectedSpecies = speciesId ? speciesIndex.byId.get(speciesId) : undefined;
   const suggestions = useMemo(() => {
-    const q = speciesText.trim().toLowerCase();
     if (selectedSpecies && selectedSpecies.common_name === speciesText) return [];
-    return species.filter((s) => !q || s.common_name.toLowerCase().includes(q)).slice(0, 8);
-  }, [species, speciesText, selectedSpecies]);
+    return searchSpecies(speciesIndex, speciesText, regions);
+  }, [speciesIndex, speciesText, selectedSpecies, regions]);
 
   const lengthMm = parseLength(length, units);
   const estimateG = estimateWeightG(lengthMm, selectedSpecies);
+  const overMax =
+    lengthMm != null && selectedSpecies?.max_length_mm != null && lengthMm > selectedSpecies.max_length_mm;
 
   async function pickPhoto(source: 'camera' | 'library') {
     const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1 };
@@ -171,30 +174,32 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
     if (!speciesText.trim()) return Alert.alert('Which fish?', 'Pick or type a species.');
     setSaving(true);
     try {
-      const localPhotoUri = photo ? await storeCatchPhoto(photo.uri, catchId, photo.width, photo.height) : null;
       const typedWeightG = parseWeight(weight, units);
-      const row: CatchDraft = {
-        id: catchId,
-        user_id: userId,
-        species_id: speciesId,
-        species_other: speciesId ? null : speciesText.trim(),
-        length_mm: lengthMm,
-        weight_g: typedWeightG ?? estimateG,
-        weight_estimated: typedWeightG == null && estimateG != null,
-        caught_at: caughtAt.toISOString(),
-        lat: coords?.lat ?? null,
-        lng: coords?.lng ?? null,
-        place_name: placeName,
-        waterbody: waterbody.trim() || null,
-        weather: (weather as unknown as Json) ?? null,
-        lure: lure.trim() || null,
-        line_lb: line ? Number.parseFloat(line) || null : null,
-        notes: notes.trim() || null,
-        released,
-        visibility,
-      };
-      // Fire-and-forget: if offline, this pauses in the persisted queue and syncs later.
-      save.mutate({ row, localPhotoUri, speciesName: selectedSpecies?.common_name ?? row.species_other ?? null });
+      // Written to local SQLite immediately; the sync engine uploads it (and the photo) when online.
+      await saveCatch({
+        id: existing?.id,
+        userId,
+        photo,
+        previousPhotoPath: photo ? existing?.photo_path : null,
+        input: {
+          species_id: speciesId,
+          species_other: speciesId ? null : speciesText.trim(),
+          length_mm: lengthMm,
+          weight_g: typedWeightG ?? estimateG,
+          weight_estimated: typedWeightG == null && estimateG != null,
+          caught_at: caughtAt.toISOString(),
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+          place_name: placeName,
+          waterbody: waterbody.trim() || null,
+          weather,
+          lure: lure.trim() || null,
+          line_lb: line ? Number.parseFloat(line) || null : null,
+          notes: notes.trim() || null,
+          released,
+          visibility,
+        },
+      });
       router.back();
     } catch (e) {
       setSaving(false);
@@ -218,7 +223,7 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
           {photo ? (
             <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
           ) : isEdit && existing?.photo_path ? (
-            <CatchPhoto catchId={catchId} photoPath={existing.photo_path} photoUrl={existing.photo_url} style={StyleSheet.absoluteFill} />
+            <CatchPhoto photoPath={existing.photo_path} photoUrl={existing.photo_url} style={StyleSheet.absoluteFill} />
           ) : null}
           <View style={styles.photoActions}>
             <Button label={photo || existing?.photo_path ? 'Retake' : 'Take photo'} icon={Camera} variant="accent" onPress={() => pickPhoto('camera')} style={{ height: 44 }} />
@@ -234,7 +239,10 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
             value={speciesText}
             onChangeText={(t) => {
               setSpeciesText(t);
-              const exact = species.find((s) => s.common_name.toLowerCase() === t.trim().toLowerCase());
+              const typed = t.trim().toLowerCase();
+              const exact = speciesIndex.list.find((s) =>
+                [s.common_name, s.common_name_fr, s.scientific_name].some((n) => n?.toLowerCase() === typed),
+              );
               setSpeciesId(exact?.id ?? null);
             }}
           />
@@ -267,6 +275,12 @@ function CatchForm({ existing }: { existing?: Catch | null }) {
             placeholder={estimateG ? `≈ ${formatWeight(estimateG, units)}` : '0.0'}
           />
         </View>
+        {overMax && selectedSpecies?.max_length_mm != null && (
+          <Text style={[type.muted, { color: colors.danger }]}>
+            That’s longer than the largest {selectedSpecies.common_name} on record (
+            {formatLength(selectedSpecies.max_length_mm, units)} {lengthUnit(units)}). Double-check the length.
+          </Text>
+        )}
         {estimateG != null && !weight && (
           <Text style={type.muted}>
             No scale? We’ll save ≈{formatWeight(estimateG, units)} {weightUnit(units)}, estimated from length for this species.

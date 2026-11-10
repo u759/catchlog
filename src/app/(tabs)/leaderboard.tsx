@@ -28,7 +28,8 @@ export default function Leaderboard() {
   const [period, setPeriod] = useState<LeaderboardPeriod>('year');
   const units = useUnits();
   const me = useUserId();
-  const { data = [], isRefetching, refetch } = useLeaderboard(period);
+  const { data: pages, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeaderboard(period);
+  const data = pages?.pages.flat() ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -37,7 +38,11 @@ export default function Leaderboard() {
         data={data}
         keyExtractor={(r) => r.user_id}
         contentContainerStyle={{ padding: space.lg, gap: space.sm }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()}tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.primary} />}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+        }}
         ListHeaderComponent={
           <View style={{ gap: space.md, marginBottom: space.sm }}>
             <View style={styles.chips}>
