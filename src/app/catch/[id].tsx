@@ -3,15 +3,15 @@ import { Fish, Pencil, Trash2 } from 'lucide-react-native';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
+import { conditionRows } from '@/components/ConditionRows';
 import { PhotoPager } from '@/components/PhotoPager';
 import { Button, EmptyState, Facts, Group, Row, Section } from '@/components/ui';
-import { astroAt, fmtTime } from '@/features/astro/astro';
+import { astroAt } from '@/features/astro/astro';
 import { deleteCatch, useCatch, useCatchPhotos, useUserId } from '@/features/catches/hooks';
 import { parseTs, speciesLabel } from '@/features/catches/model';
 import { useUnits } from '@/features/profile/hooks';
-import { formatTemp, formatWind, weatherLabel } from '@/features/weather/openMeteo';
 import { colors, radius, space, touch, type } from '@/theme';
-import { formatFlow, formatLength, formatLevel, formatTideHeight, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
+import { formatLength, formatWeight, lengthUnit, weightUnit } from '@/utils/units';
 
 export default function CatchDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,17 +50,6 @@ export default function CatchDetails() {
   const caught = parseTs(c.caught_at);
   const weather = c.weather;
   const astro = c.lat != null && c.lng != null ? astroAt(caught, c.lat, c.lng) : null;
-  const tide = c.conditions?.tide;
-  const gauge = c.conditions?.water;
-  const sea = c.conditions?.sea_temp;
-  // Gauge readings, one row each; the station is named once, under the last.
-  const gaugeRows = gauge
-    ? [
-        gauge.temp_c != null && { label: 'Water temperature', value: formatTemp(gauge.temp_c, units) },
-        gauge.level_m != null && { label: 'Water level', value: formatLevel(gauge.level_m, units) },
-        gauge.flow_m3s != null && { label: 'Flow', value: formatFlow(gauge.flow_m3s, units) },
-      ].filter((r): r is { label: string; value: string } => !!r)
-    : [];
 
   const confirmDelete = () =>
     Alert.alert('Delete this catch?', 'It is removed from all your devices.', [
@@ -122,39 +111,18 @@ export default function CatchDetails() {
         {(weather || astro || c.conditions) && (
           <Section title="Conditions">
             <Group>
-              {weather ? <Row label="Weather" value={`${formatTemp(weather.temp_c, units)}, ${weatherLabel(weather.weather_code)}`} /> : null}
-              {weather ? <Row label="Wind" value={formatWind(weather.wind_kph, weather.wind_dir_deg, units)} /> : null}
-              {weather ? <Row label="Air pressure" value={`${Math.round(weather.pressure_hpa)} hPa`} /> : null}
-              {tide ? (
-                <Row
-                  label="Tide"
-                  value={`${tide.trend === 'rising' ? 'Rising' : 'Falling'}, ${formatTideHeight(tide.height_m, units)}`}
-                  sub={[
-                    tide.next &&
-                      `${tide.next.kind === 'high' ? 'High' : 'Low'} ${formatTideHeight(tide.next.height_m, units)} at ${fmtTime(parseTs(tide.next.at))}`,
-                    tide.station,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                />
-              ) : null}
-              {gaugeRows.map((r, i) => (
-                <Row key={r.label} label={r.label} value={r.value} sub={i === gaugeRows.length - 1 ? `Gauge: ${gauge!.station}` : null} />
-              ))}
-              {sea ? <Row label="Sea temperature" value={formatTemp(sea.temp_c, units)} sub="Satellite, daily average" /> : null}
-              {astro ? <Row label="Moon" value={`${astro.moonPhase}, ${Math.round(astro.moonIllumination * 100)}%`} /> : null}
-              {astro ? <Row label="Sunrise – sunset" value={`${fmtTime(astro.sunrise)} – ${fmtTime(astro.sunset)}`} /> : null}
-              {astro ? (
-                <Row
-                  label="Solunar"
-                  numberOfLines={2}
-                  sub={
-                    astro.inPeriod
-                      ? `Caught in a ${astro.inPeriod.kind} feeding period (${fmtTime(astro.inPeriod.start)}–${fmtTime(astro.inPeriod.end)})`
-                      : astro.periods.map((p) => `${p.kind} ${fmtTime(p.start)}`).join(', ') || 'No periods this day'
-                  }
-                />
-              ) : null}
+              {conditionRows(
+                {
+                  weather,
+                  tide: c.conditions?.tide,
+                  gauge: c.conditions?.water,
+                  seaTempC: c.conditions?.sea_temp?.temp_c,
+                  astro,
+                  when: 'catch',
+                  gaugeLabel: true,
+                },
+                units,
+              )}
             </Group>
           </Section>
         )}

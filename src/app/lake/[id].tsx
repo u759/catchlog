@@ -1,21 +1,22 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { Check, FileDown, Map as MapIcon, Waves } from 'lucide-react-native';
+import { ArrowDownToLine, Check, ChevronsDown, Expand, FileDown, Map as MapIcon, Waves } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
+import { conditionRows } from '@/components/ConditionRows';
 import { Button, EmptyState, Facts, Group, Row, Section } from '@/components/ui';
 import { useUserId } from '@/features/catches/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import { isDepthMapSaved, openDepthMap, useWaterbody, useWaterbodySpecies } from '@/features/waterbodies/hooks';
 import { useLakeGauges, useWaterNow, type WaterNow } from '@/features/waterbodies/waterNow';
-import { fmtTime } from '@/features/astro/astro';
-import { formatTemp } from '@/features/weather/openMeteo';
+import { astroAt, fmtTime } from '@/features/astro/astro';
+import { useCurrentWeather } from '@/features/weather/openMeteo';
 import { useLiveQuery } from '@/lib/sync/db';
 import { colors, radius, space, type } from '@/theme';
-import { depthUnit, formatDepth, formatFlow, formatLevel, formatLevelChange, type Units } from '@/utils/units';
+import { depthUnit, formatArea, formatDepth, formatLevelChange, type Units } from '@/utils/units';
 
 export default function LakeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -31,6 +32,8 @@ export default function LakeScreen() {
   const [opening, setOpening] = useState<string | null>(null);
   const gauges = useLakeGauges(id);
   const water = useWaterNow(gauges[0]);
+  const weather = useCurrentWeather(lake?.lat, lake?.lng);
+  const [now] = useState(() => new Date());
 
   if (!lake) {
     return (
@@ -59,31 +62,47 @@ export default function LakeScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <View style={{ gap: space.xs }}>
           <Text style={type.title}>{lake.name ?? 'Unnamed lake'}</Text>
-          <Facts
-            items={[
-              lake.max_depth_m != null && `${formatDepth(lake.max_depth_m, units)} ${depthUnit(units)} deep`,
-              lake.mean_depth_m != null && `mean ${formatDepth(lake.mean_depth_m, units)} ${depthUnit(units)}`,
-              lake.area_ha != null && `${lake.area_ha.toFixed(lake.area_ha < 10 ? 1 : 0)} ha`,
-              caught > 0 && `${caught} of your catches`,
-            ]}
-          />
+          {caught > 0 && <Facts items={[`${caught} of your catches`]} />}
         </View>
 
-        {gauges.length > 0 && (
-          <Section title="Water now">
-            {water.data ? (
-              <WaterNowRows w={water.data} units={units} />
-            ) : (
-              <Text style={type.secondary}>
-                {water.isError ? 'Needs signal to read the gauge.' : 'Reading the gauge…'}
-              </Text>
+        {(lake.max_depth_m != null || lake.mean_depth_m != null || lake.area_ha != null) && (
+          <Group>
+            {lake.max_depth_m != null && (
+              <Row icon={ArrowDownToLine} label="Deepest" value={`${formatDepth(lake.max_depth_m, units)} ${depthUnit(units)}`} />
             )}
-            <Text style={type.caption}>
-              {[water.data && `${water.data.station} gauge`, latestReading(water.data) && fmtTime(latestReading(water.data)),
-                'provisional data, Environment and Climate Change Canada'].filter(Boolean).join(' · ')}
-            </Text>
-          </Section>
+            {lake.mean_depth_m != null && (
+              <Row icon={ChevronsDown} label="Average depth" value={`${formatDepth(lake.mean_depth_m, units)} ${depthUnit(units)}`} />
+            )}
+            {lake.area_ha != null && <Row icon={Expand} label="Area" value={formatArea(lake.area_ha, units)} />}
+          </Group>
         )}
+
+        <Section title="Conditions now">
+          <Group>
+            {conditionRows(
+              {
+                weather: weather.data,
+                gauge: water.data ? gaugeNow(water.data, units) : null,
+                astro: astroAt(now, lake.lat, lake.lng),
+                when: 'now',
+              },
+              units,
+            )}
+          </Group>
+          <Text style={type.caption}>
+            {[
+              !weather.data && !weather.isLoading && 'Weather needs signal',
+              gauges.length > 0 &&
+                (water.data
+                  ? `Water: ${water.data.station} gauge, ${fmtTime(latestReading(water.data))}, provisional (Environment and Climate Change Canada)`
+                  : water.isError
+                    ? 'The water gauge needs signal'
+                    : 'Reading the water gauge…'),
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Weather: Open-Meteo'}
+          </Text>
+        </Section>
 
         <Section title="Depth maps">
           {lake.depth_maps.length === 0 && !lake.has_contours ? (
@@ -177,24 +196,14 @@ export default function LakeScreen() {
 const latestReading = (w: WaterNow | undefined) =>
   [w?.temp_c?.at, w?.level_m?.at, w?.flow_m3s?.at].reduce<Date | null>((a, b) => (b && (!a || b > a) ? b : a), null);
 
-/** Latest gauge readings, one row each (the gauge and time are in the caption under the group). */
-function WaterNowRows({ w, units }: { w: WaterNow; units: Units }) {
-  const since = (r: { value: number; dayAgo: number | null }) =>
-    r.dayAgo != null ? `${formatLevelChange(r.value - r.dayAgo, units)} since yesterday` : null;
-  const rows = [
-    w.temp_c && { label: 'Water temperature', value: formatTemp(w.temp_c.value, units), sub: null, at: w.temp_c.at },
-    w.level_m && { label: 'Water level', value: formatLevel(w.level_m.value, units), sub: since(w.level_m), at: w.level_m.at },
-    w.flow_m3s && { label: 'Flow', value: formatFlow(w.flow_m3s.value, units), sub: null, at: w.flow_m3s.at },
-  ].filter((r): r is { label: string; value: string; sub: string | null; at: Date } => !!r);
-  if (!rows.length) return <Text style={type.secondary}>The gauge has no readings in the last day.</Text>;
-  return (
-    <Group>
-      {rows.map((r) => (
-        <Row key={r.label} label={r.label} value={r.value} sub={r.sub} />
-      ))}
-    </Group>
-  );
-}
+/** Latest gauge readings as condition rows (the level with its change since yesterday). */
+const gaugeNow = (w: WaterNow, units: Units) => ({
+  temp_c: w.temp_c?.value ?? null,
+  level_m: w.level_m?.value ?? null,
+  flow_m3s: w.flow_m3s?.value ?? null,
+  levelSub:
+    w.level_m?.dayAgo != null ? `${formatLevelChange(w.level_m.value - w.level_m.dayAgo, units)} since yesterday` : null,
+});
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl * 2 },

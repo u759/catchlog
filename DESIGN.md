@@ -238,7 +238,10 @@ A catch's cover photo leads its screen at 4:3 with 16px corners. With several ph
 "Identify from photo" is a Text button under the Species field, only when there is a photo, disabled offline ("Identify needs signal"). Suggestions appear as Chips with the certainty ("Rainbow Trout · 84%"); tapping one fills the species, nothing is chosen automatically. A Caption credits Fishial.ai and shows the IDs left this month.
 
 ### Conditions rows
-Catch conditions are rows in one Group: weather, wind, air pressure, then tide ("Rising, 3.5 m", next high/low and station as the subtitle), water temperature, level and flow (the gauge named once, under the last), sea temperature ("Satellite, daily average"), moon, sun, solunar. A row appears only when its value exists. The lake page's "Water now" uses the same rows with the gauge and reading time in the Caption under the group.
+One shared set of rows (`conditionRows`), each with a muted 20px icon: weather (icon follows the sky), wind, air pressure, tide ("Rising, 3.5 m", next high/low and station as the subtitle), water temperature, level and flow, sea temperature ("Satellite, daily average"), moon, sunrise – sunset, solunar. A row appears only when its value exists. The catch screen shows them for the catch's moment (gauge named under its last row); the lake page's "Conditions now" shows them for now (weather online, sun/moon/solunar offline, the gauge and reading time in the Caption).
+
+### Fact rows
+Measured facts about a place use icon rows in a Group rather than tiles: the lake page shows Deepest, Average depth and Area this way, in the user's units.
 
 ### Badge
 Lime pill with Deep Moss caption text (600): "Personal best", "Caught 3×", a Dex card's catch count. The only place lime appears.

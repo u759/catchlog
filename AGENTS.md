@@ -71,7 +71,7 @@ Check here first; extend these instead of adding parallel versions.
 **UI (`src/components`, `src/theme`):**
 - Theme tokens: `colors`, `type` (7 text roles), `space`, `radius`, `touch` (44), `motion` (durations), `floating` (map-only shadow).
 - `ui/`: `Button` (primary/secondary/text/danger), `Chip`, `Segmented` (sliding pill), `Dropdown` (anchored menu), `Sheet` (bottom sheet), `Section`, `Group`, `Row`, `Facts`, `Badge` (the only lime), `Card`, `Field`, `SearchField` (filter a list in place), `EmptyState`, `Tip` (one-time hint), `listItemLayout`.
-- `AppHeader` (tab large title / detail back), `HeaderButton` (round icon button for a tab header's `right`), `ModalHeader` (forms); `CatchPhoto` (local file first, then signed URL); `PhotoPager` (a catch's photos, swipe + page dots).
+- `AppHeader` (tab large title / detail back), `HeaderButton` (round icon button for a tab header's `right`), `ModalHeader` (forms); `CatchPhoto` (local file first, then signed URL); `PhotoPager` (a catch's photos, swipe + page dots); `ConditionRows` (`conditionRows()`: the icon rows for weather/tide/water/sea/moon/sun/solunar, used by the catch screen and the lake page; `weatherIcon`).
 - Motion: Reanimated 4 only. CSS transitions inside the shared components, `listItemLayout` on single-column `Animated.FlatList`s that change; Reanimated follows the system Reduce Motion setting by default and CSS transitions check `useReducedMotion`. Don't use RN `Animated` or `LayoutAnimation`, and don't hand-roll animations in screens; add motion to the shared component instead.
 
 **Features (`src/features`):**
@@ -80,8 +80,8 @@ Check here first; extend these instead of adding parallel versions.
 - `collection/`: `useDex`, `useSpecies`, `useSpeciesLakes`, `useLakeRegions`, `useNearbySpecies` (`NEAR_KM`); `fishbaseLabels.ts` (plain words for FishBase terms).
 - `waterbodies/`: `useWaterbody`, `useWaterbodySpecies`, `detectWaterbody` (offline lake guess), `speciesInWaterbody`, `openDepthMap`; `waterNow.ts` (`useLakeGauges`, `useWaterNow`: live gauge readings, online).
 - `map/offline.ts`: map style URLs (OpenFreeMap, satellite), offline-area limits and tile maths, `offlineBytes`. `map/contours.ts`: `useContoursUri` (BC lake depth contours fetched from the BC WFS to a device file, monthly).
-- `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts` (`fetchCurrentWeather`, `fetchWeatherAt` for a past hour), `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
-- `src/utils/units.ts`: length, weight, depth, lure weight, distance, gauge level (+ change), flow, tide height formatting/parsing.
+- `gear/` (`taxonomy.ts`: lure/tackle categories, groups, styles), `spots/`, `astro/` (moon/sun/solunar), `weather/openMeteo.ts` (`fetchCurrentWeather`, `useCurrentWeather`, `fetchWeatherAt` for a past hour), `profile/` (units, friends), `leaderboard/`, `tips.ts` (`useTip`).
+- `src/utils/units.ts`: length, weight, depth, area, lure weight, distance, gauge level (+ change), flow, tide height formatting/parsing.
 
 **Data layer (`src/lib/sync`):** `db.ts` (`useLiveQuery`, `write`, `transaction`, `getState`/`setState`, `MIGRATIONS`, `wipeLocalData`), `engine.ts` (`writeLocal`, pulls, reference sync with `reference_version`), `photos.ts` (photo upload/download queue; `useLocalPhotoUri`: a photo file that updates when its download lands), `images.ts` (species photo prefetch for offline), `backfill.ts` (weather/place for catches logged offline, by catch time).
 

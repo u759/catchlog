@@ -71,6 +71,12 @@ export function parseLureWeight(text: string, u: Units): number | null {
   return Math.round((u === 'imperial' ? n * G_PER_OZ : n) * 10) / 10;
 }
 
+/** Lake area (stored in hectares): ha or acres. */
+export function formatArea(ha: number, u: Units): string {
+  const v = u === 'imperial' ? ha * 2.47105 : ha;
+  return `${v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString()} ${u === 'imperial' ? 'acres' : 'ha'}`;
+}
+
 /** Gauge water level (metres above the gauge's own datum, so only comparable at the same gauge). */
 export function formatLevel(m: number, u: Units): string {
   return u === 'imperial' ? `${(m / M_PER_FT).toFixed(1)} ft` : `${m.toFixed(2)} m`;

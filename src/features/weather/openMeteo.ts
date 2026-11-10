@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+
 // Open-Meteo: free, no API key, so the app can call it directly (no backend needed).
 // https://open-meteo.com/en/docs
 export type Weather = {
@@ -28,6 +30,16 @@ export async function fetchCurrentWeather(lat: number, lng: number): Promise<Wea
   } catch {
     return null; // offline at the lake: just skip conditions
   }
+}
+
+/** Weather right now at a place (lake page). Online; `data` is null without signal. */
+export function useCurrentWeather(lat: number | null | undefined, lng: number | null | undefined) {
+  return useQuery({
+    queryKey: ['weather-now', lat?.toFixed(2), lng?.toFixed(2)],
+    queryFn: () => fetchCurrentWeather(lat!, lng!),
+    enabled: lat != null && lng != null,
+    staleTime: 15 * 60_000,
+  });
 }
 
 /**
