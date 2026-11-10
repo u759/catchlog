@@ -59,6 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ? [['@react-native-google-signin/google-signin', { iosUrlScheme: googleIosUrlScheme }] as [string, object]]
       : []),
     '@react-native-community/datetimepicker',
+    '@maplibre/maplibre-react-native',
     './plugins/withReleaseSigning',
   ],
   experiments: {

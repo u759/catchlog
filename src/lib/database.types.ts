@@ -45,6 +45,7 @@ export type Database = {
           caught_at: string
           created_at: string
           deleted_at: string | null
+          gear_id: string | null
           id: string
           lat: number | null
           length_mm: number | null
@@ -61,6 +62,7 @@ export type Database = {
           user_id: string
           visibility: string
           waterbody: string | null
+          waterbody_id: string | null
           weather: Json | null
           weight_estimated: boolean
           weight_g: number | null
@@ -69,6 +71,7 @@ export type Database = {
           caught_at?: string
           created_at?: string
           deleted_at?: string | null
+          gear_id?: string | null
           id?: string
           lat?: number | null
           length_mm?: number | null
@@ -85,6 +88,7 @@ export type Database = {
           user_id?: string
           visibility?: string
           waterbody?: string | null
+          waterbody_id?: string | null
           weather?: Json | null
           weight_estimated?: boolean
           weight_g?: number | null
@@ -93,6 +97,7 @@ export type Database = {
           caught_at?: string
           created_at?: string
           deleted_at?: string | null
+          gear_id?: string | null
           id?: string
           lat?: number | null
           length_mm?: number | null
@@ -109,6 +114,7 @@ export type Database = {
           user_id?: string
           visibility?: string
           waterbody?: string | null
+          waterbody_id?: string | null
           weather?: Json | null
           weight_estimated?: boolean
           weight_g?: number | null
@@ -129,6 +135,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      data_sources: {
+        Row: {
+          attribution: string
+          depends_on: string[]
+          enabled: boolean
+          key: string
+          last_attempt_at: string | null
+          last_error: string | null
+          last_row_count: number | null
+          last_success_at: string | null
+          licence: string
+          name: string
+          refresh_every: string
+          region: string | null
+          running_since: string | null
+          state: Json
+          url: string | null
+        }
+        Insert: {
+          attribution: string
+          depends_on?: string[]
+          enabled?: boolean
+          key: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_row_count?: number | null
+          last_success_at?: string | null
+          licence: string
+          name: string
+          refresh_every?: string
+          region?: string | null
+          running_since?: string | null
+          state?: Json
+          url?: string | null
+        }
+        Update: {
+          attribution?: string
+          depends_on?: string[]
+          enabled?: boolean
+          key?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_row_count?: number | null
+          last_success_at?: string | null
+          licence?: string
+          name?: string
+          refresh_every?: string
+          region?: string | null
+          running_since?: string | null
+          state?: Json
+          url?: string | null
+        }
+        Relationships: []
       }
       friendships: {
         Row: {
@@ -163,6 +223,68 @@ export type Database = {
           {
             foreignKeyName: "friendships_requester_id_fkey"
             columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gear: {
+        Row: {
+          brand: string | null
+          category: string
+          color: string | null
+          created_at: string
+          deleted_at: string | null
+          hook_size: string | null
+          id: string
+          name: string
+          notes: string | null
+          quantity: number | null
+          size: string | null
+          subtype: string | null
+          updated_at: string
+          user_id: string
+          weight_g: number | null
+        }
+        Insert: {
+          brand?: string | null
+          category: string
+          color?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          hook_size?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          quantity?: number | null
+          size?: string | null
+          subtype?: string | null
+          updated_at?: string
+          user_id?: string
+          weight_g?: number | null
+        }
+        Update: {
+          brand?: string | null
+          category?: string
+          color?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          hook_size?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          quantity?: number | null
+          size?: string | null
+          subtype?: string | null
+          updated_at?: string
+          user_id?: string
+          weight_g?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -204,6 +326,7 @@ export type Database = {
           brackish: boolean | null
           common_name: string
           common_name_fr: string | null
+          dex_no: number | null
           family: string | null
           fishbase_id: number | null
           freshwater: boolean | null
@@ -227,6 +350,7 @@ export type Database = {
           brackish?: boolean | null
           common_name: string
           common_name_fr?: string | null
+          dex_no?: number | null
           family?: string | null
           fishbase_id?: number | null
           freshwater?: boolean | null
@@ -250,6 +374,7 @@ export type Database = {
           brackish?: boolean | null
           common_name?: string
           common_name_fr?: string | null
+          dex_no?: number | null
           family?: string | null
           fishbase_id?: number | null
           freshwater?: boolean | null
@@ -271,11 +396,311 @@ export type Database = {
         }
         Relationships: []
       }
+      species_aliases: {
+        Row: {
+          alias: string
+          alias_type: string
+          species_id: string
+        }
+        Insert: {
+          alias: string
+          alias_type: string
+          species_id: string
+        }
+        Update: {
+          alias?: string
+          alias_type?: string
+          species_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "species_aliases_species_id_fkey"
+            columns: ["species_id"]
+            isOneToOne: false
+            referencedRelation: "species"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      species_profiles: {
+        Row: {
+          canada_notes: string | null
+          canada_status: string | null
+          depth_max_m: number | null
+          depth_min_m: number | null
+          diet: string | null
+          environment: string | null
+          feeding: string | null
+          habitat: string | null
+          id_features: string | null
+          image_author: string | null
+          image_license: string | null
+          image_page_url: string | null
+          image_thumb_url: string | null
+          image_url: string | null
+          iucn_status: string | null
+          longevity_years: number | null
+          max_weight_g: number | null
+          migration: string | null
+          spawning_months: number[] | null
+          species_id: string
+          summary: string | null
+          summary_url: string | null
+          temp_pref_max_c: number | null
+          temp_pref_min_c: number | null
+          updated_at: string
+          wikidata_id: string | null
+        }
+        Insert: {
+          canada_notes?: string | null
+          canada_status?: string | null
+          depth_max_m?: number | null
+          depth_min_m?: number | null
+          diet?: string | null
+          environment?: string | null
+          feeding?: string | null
+          habitat?: string | null
+          id_features?: string | null
+          image_author?: string | null
+          image_license?: string | null
+          image_page_url?: string | null
+          image_thumb_url?: string | null
+          image_url?: string | null
+          iucn_status?: string | null
+          longevity_years?: number | null
+          max_weight_g?: number | null
+          migration?: string | null
+          spawning_months?: number[] | null
+          species_id: string
+          summary?: string | null
+          summary_url?: string | null
+          temp_pref_max_c?: number | null
+          temp_pref_min_c?: number | null
+          updated_at?: string
+          wikidata_id?: string | null
+        }
+        Update: {
+          canada_notes?: string | null
+          canada_status?: string | null
+          depth_max_m?: number | null
+          depth_min_m?: number | null
+          diet?: string | null
+          environment?: string | null
+          feeding?: string | null
+          habitat?: string | null
+          id_features?: string | null
+          image_author?: string | null
+          image_license?: string | null
+          image_page_url?: string | null
+          image_thumb_url?: string | null
+          image_url?: string | null
+          iucn_status?: string | null
+          longevity_years?: number | null
+          max_weight_g?: number | null
+          migration?: string | null
+          spawning_months?: number[] | null
+          species_id?: string
+          summary?: string | null
+          summary_url?: string | null
+          temp_pref_max_c?: number | null
+          temp_pref_min_c?: number | null
+          updated_at?: string
+          wikidata_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "species_profiles_species_id_fkey"
+            columns: ["species_id"]
+            isOneToOne: true
+            referencedRelation: "species"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spots: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          depth_m: number | null
+          id: string
+          lat: number
+          lng: number
+          name: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+          waterbody_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          depth_m?: number | null
+          id?: string
+          lat: number
+          lng: number
+          name: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+          waterbody_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          depth_m?: number | null
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+          waterbody_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spots_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waterbodies: {
+        Row: {
+          area_ha: number | null
+          attributes: Json
+          bbox: number[] | null
+          depth_maps: Json
+          geom: unknown
+          id: string
+          kind: string
+          lat: number | null
+          lng: number | null
+          max_depth_m: number | null
+          mean_depth_m: number | null
+          name: string | null
+          region: string
+          source: string
+          source_id: string
+          updated_at: string
+        }
+        Insert: {
+          area_ha?: number | null
+          attributes?: Json
+          bbox?: number[] | null
+          depth_maps?: Json
+          geom?: unknown
+          id?: string
+          kind?: string
+          lat?: number | null
+          lng?: number | null
+          max_depth_m?: number | null
+          mean_depth_m?: number | null
+          name?: string | null
+          region: string
+          source: string
+          source_id: string
+          updated_at?: string
+        }
+        Update: {
+          area_ha?: number | null
+          attributes?: Json
+          bbox?: number[] | null
+          depth_maps?: Json
+          geom?: unknown
+          id?: string
+          kind?: string
+          lat?: number | null
+          lng?: number | null
+          max_depth_m?: number | null
+          mean_depth_m?: number | null
+          name?: string | null
+          region?: string
+          source?: string
+          source_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      waterbody_keys: {
+        Row: {
+          key_type: string
+          key_value: string
+          waterbody_id: string
+        }
+        Insert: {
+          key_type: string
+          key_value: string
+          waterbody_id: string
+        }
+        Update: {
+          key_type?: string
+          key_value?: string
+          waterbody_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waterbody_keys_waterbody_id_fkey"
+            columns: ["waterbody_id"]
+            isOneToOne: false
+            referencedRelation: "waterbodies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waterbody_species: {
+        Row: {
+          first_observed: string | null
+          last_observed: string | null
+          observations: number
+          source: string
+          species_id: string
+          updated_at: string
+          waterbody_id: string
+        }
+        Insert: {
+          first_observed?: string | null
+          last_observed?: string | null
+          observations?: number
+          source: string
+          species_id: string
+          updated_at?: string
+          waterbody_id: string
+        }
+        Update: {
+          first_observed?: string | null
+          last_observed?: string | null
+          observations?: number
+          source?: string
+          species_id?: string
+          updated_at?: string
+          waterbody_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waterbody_species_species_id_fkey"
+            columns: ["species_id"]
+            isOneToOne: false
+            referencedRelation: "species"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waterbody_species_waterbody_id_fkey"
+            columns: ["waterbody_id"]
+            isOneToOne: false
+            referencedRelation: "waterbodies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      finalize_observations: { Args: { p_source: string }; Returns: number }
       leaderboard: {
         Args: {
           p_limit?: number
@@ -314,8 +739,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reference_version: { Args: { p_table: string }; Returns: string }
       send_friend_request: { Args: { p_code: string }; Returns: Json }
+      set_waterbody_depth_maps: {
+        Args: { p_licence: string; p_rows: Json; p_source: string }
+        Returns: number
+      }
+      set_waterbody_depths: { Args: { p_rows: Json }; Returns: number }
       species_version: { Args: never; Returns: string }
+      stage_observations: {
+        Args: { p_rows: Json; p_source: string }
+        Returns: number
+      }
+      upsert_waterbodies: {
+        Args: {
+          p_region: string
+          p_rows: Json
+          p_run: string
+          p_source: string
+        }
+        Returns: number
+      }
+      waterbody_at: { Args: { p_lat: number; p_lng: number }; Returns: string }
     }
     Enums: {
       [_ in never]: never

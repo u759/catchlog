@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Anchor, ArrowLeft, Clock, Fish, MapPin, NotebookPen, Pencil, Sun, Trash2, Wind } from 'lucide-react-native';
+import { Anchor, ArrowLeft, Clock, Fish, MapPin, Moon, NotebookPen, Pencil, Sun, Sunrise, Trash2, Wind } from 'lucide-react-native';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CatchPhoto } from '@/components/CatchPhoto';
 import { Button, Card, EmptyState, InfoPill, Section, StatTile } from '@/components/ui';
+import { astroAt, fmtTime } from '@/features/astro/astro';
 import { deleteCatch, useCatch, useUserId } from '@/features/catches/hooks';
 import { parseTs, speciesLabel } from '@/features/catches/model';
 import { useUnits } from '@/features/profile/hooks';
@@ -47,6 +48,7 @@ export default function CatchDetails() {
 
   const caught = parseTs(c.caught_at);
   const weather = c.weather;
+  const astro = c.lat != null && c.lng != null ? astroAt(caught, c.lat, c.lng) : null;
   const mine = c.user_id === userId;
 
   const confirmDelete = () =>
@@ -80,10 +82,13 @@ export default function CatchDetails() {
           <CatchPhoto photoPath={c.photo_path} photoUrl={c.photo_url} style={styles.photo} iconSize={48} />
           <View style={{ padding: space.lg, gap: space.xs }}>
             {(c.waterbody || c.place_name) && (
-              <View style={styles.inline}>
+              <Pressable
+                style={styles.inline}
+                disabled={!c.waterbody_id}
+                onPress={() => c.waterbody_id && router.push({ pathname: '/lake/[id]', params: { id: c.waterbody_id } })}>
                 <MapPin size={16} color={colors.textMuted} />
-                <Text style={type.body}>{[c.waterbody, c.place_name].filter(Boolean).join(' • ')}</Text>
-              </View>
+                <Text style={[type.body, c.waterbody_id && styles.linkText]}>{[c.waterbody, c.place_name].filter(Boolean).join(' • ')}</Text>
+              </Pressable>
             )}
             <View style={styles.inline}>
               <Clock size={16} color={colors.textMuted} />
@@ -110,13 +115,30 @@ export default function CatchDetails() {
           />
         </View>
 
-        {weather && (
+        {(weather || astro) && (
           <Section title="Conditions" icon={Sun}>
-            <View style={styles.pills}>
-              <InfoPill icon={Sun} label="Weather" value={`${formatTemp(weather.temp_c, units)}, ${weatherLabel(weather.weather_code)}`} />
-              <InfoPill icon={Wind} label="Wind" value={formatWind(weather.wind_kph, weather.wind_dir_deg, units)} />
-            </View>
-            <Text style={type.muted}>Pressure {Math.round(weather.pressure_hpa)} hPa</Text>
+            {weather && (
+              <>
+                <View style={styles.pills}>
+                  <InfoPill icon={Sun} label="Weather" value={`${formatTemp(weather.temp_c, units)}, ${weatherLabel(weather.weather_code)}`} />
+                  <InfoPill icon={Wind} label="Wind" value={formatWind(weather.wind_kph, weather.wind_dir_deg, units)} />
+                </View>
+                <Text style={type.muted}>Pressure {Math.round(weather.pressure_hpa)} hPa</Text>
+              </>
+            )}
+            {astro && (
+              <>
+                <View style={styles.pills}>
+                  <InfoPill icon={Moon} label="Moon" value={`${astro.moonPhase} · ${Math.round(astro.moonIllumination * 100)}%`} />
+                  <InfoPill icon={Sunrise} label="Sun" value={`${fmtTime(astro.sunrise)} – ${fmtTime(astro.sunset)}`} />
+                </View>
+                <Text style={type.muted}>
+                  {astro.inPeriod
+                    ? `Caught during a solunar ${astro.inPeriod.kind} period (${fmtTime(astro.inPeriod.start)}–${fmtTime(astro.inPeriod.end)}).`
+                    : `Solunar: ${astro.periods.map((p) => `${p.kind} ${fmtTime(p.start)}`).join(', ') || 'none this day'}.`}
+                </Text>
+              </>
+            )}
           </Section>
         )}
 
@@ -124,7 +146,11 @@ export default function CatchDetails() {
           <Section title="Tackle" icon={Anchor}>
             <View style={styles.tackle}>
               <Anchor size={18} color={colors.primary} />
-              <Text style={[type.body, { flex: 1, fontWeight: '600' }]}>{c.lure ?? 'Unknown lure'}</Text>
+              <Text
+                style={[type.body, { flex: 1, fontWeight: '600' }, mine && c.gear_id ? styles.linkText : null]}
+                onPress={mine && c.gear_id ? () => router.push({ pathname: '/gear/edit', params: { id: c.gear_id! } }) : undefined}>
+                {c.lure ?? 'Unknown lure'}
+              </Text>
               {c.line_lb ? <Text style={type.muted}>{c.line_lb}lb line</Text> : null}
             </View>
           </Section>
@@ -159,6 +185,7 @@ const styles = StyleSheet.create({
   body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl * 2 },
   photo: { width: '100%', aspectRatio: 4 / 3 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  linkText: { color: colors.primary, textDecorationLine: 'underline' },
   stats: { flexDirection: 'row', gap: space.sm },
   pills: { flexDirection: 'row', gap: space.sm },
   tackle: {

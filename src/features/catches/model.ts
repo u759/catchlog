@@ -21,6 +21,8 @@ export type CatchView = {
   notes: string | null;
   weather: Weather | null;
   photo_path: string | null;
+  gear_id: string | null;
+  waterbody_id: string | null;
   /** Signed URL, only for catches fetched from the server (friends'). */
   photo_url?: string | null;
   released: boolean;
@@ -75,6 +77,8 @@ export function fromLocal(r: LocalCatchRow): CatchView {
     notes: (r.notes as string) ?? null,
     weather: parseWeather(r.weather),
     photo_path: (r.photo_path as string) ?? null,
+    gear_id: (r.gear_id as string) ?? null,
+    waterbody_id: (r.waterbody_id as string) ?? null,
     released: !!r.released,
     visibility: ((r.visibility as string) ?? 'friends') as CatchView['visibility'],
   };

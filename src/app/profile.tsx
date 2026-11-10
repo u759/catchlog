@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Check, LogOut, Pencil, Ruler, UserPlus, Users, X } from 'lucide-react-native';
 import { useState } from 'react';
@@ -79,7 +80,7 @@ export default function Profile() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <AppHeader title="Profile" />
+      <AppHeader title="Profile" back />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.me}>
           {profile?.avatar_url ? (
@@ -194,10 +195,9 @@ export default function Profile() {
 
         <Button label="Sign out" icon={LogOut} variant="ghost" onPress={confirmSignOut} />
 
-        <Text style={[type.muted, { fontSize: 11, textAlign: 'center' }]}>
-          Species data: Wild Species 2020, Canadian Endangered Species Conservation Council (2022). Names, sizes and
-          weight estimates: FishBase (Froese & Pauly, eds.), CC BY-NC 4.0.
-        </Text>
+        <Pressable onPress={() => router.push('/credits')} style={{ alignSelf: 'center' }}>
+          <Text style={[type.muted, { textDecorationLine: 'underline' }]}>Data sources & credits</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );

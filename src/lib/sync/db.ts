@@ -62,6 +62,53 @@ const MIGRATIONS: string[] = [
 
   CREATE TABLE sync_state (key TEXT PRIMARY KEY NOT NULL, value TEXT);
   `,
+  // v2: species collection + profiles, waterbodies, tackle (gear), saved spots.
+  `
+  ALTER TABLE species ADD COLUMN dex_no INTEGER;
+  ALTER TABLE species ADD COLUMN order_name TEXT;
+  CREATE INDEX species_dex ON species (dex_no);
+
+  CREATE TABLE species_profiles (
+    species_id TEXT PRIMARY KEY NOT NULL, summary TEXT, summary_url TEXT, habitat TEXT, environment TEXT,
+    migration TEXT, depth_min_m INTEGER, depth_max_m INTEGER, temp_pref_min_c REAL, temp_pref_max_c REAL,
+    spawning_months TEXT, feeding TEXT, diet TEXT, id_features TEXT, max_weight_g INTEGER, longevity_years REAL,
+    iucn_status TEXT, canada_status TEXT, canada_notes TEXT, image_url TEXT, image_thumb_url TEXT,
+    image_author TEXT, image_license TEXT, image_page_url TEXT, updated_at TEXT
+  );
+
+  CREATE TABLE waterbodies (
+    id TEXT PRIMARY KEY NOT NULL, region TEXT, kind TEXT, name TEXT, area_ha REAL, max_depth_m REAL,
+    mean_depth_m REAL, depth_maps TEXT, lat REAL, lng REAL, west REAL, south REAL, east REAL, north REAL,
+    updated_at TEXT
+  );
+  CREATE INDEX waterbodies_bbox ON waterbodies (south, north, west, east);
+  CREATE INDEX waterbodies_name ON waterbodies (name);
+
+  CREATE TABLE waterbody_species (
+    waterbody_id TEXT NOT NULL, species_id TEXT NOT NULL, source TEXT NOT NULL, observations INTEGER,
+    first_observed TEXT, last_observed TEXT, updated_at TEXT, PRIMARY KEY (waterbody_id, species_id, source)
+  );
+  CREATE INDEX waterbody_species_species ON waterbody_species (species_id);
+
+  CREATE TABLE gear (
+    id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL, category TEXT NOT NULL, subtype TEXT, brand TEXT,
+    name TEXT NOT NULL, color TEXT, size TEXT, weight_g REAL, hook_size TEXT, quantity INTEGER, notes TEXT,
+    created_at TEXT, updated_at TEXT
+  );
+
+  CREATE TABLE spots (
+    id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL, name TEXT NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL,
+    depth_m REAL, notes TEXT, waterbody_id TEXT, created_at TEXT, updated_at TEXT
+  );
+
+  ALTER TABLE catches ADD COLUMN gear_id TEXT;
+  ALTER TABLE catches ADD COLUMN waterbody_id TEXT;
+  CREATE INDEX catches_gear ON catches (gear_id);
+  CREATE INDEX catches_species ON catches (species_id);
+
+  -- New columns: refetch catches and species in full on the next sync.
+  DELETE FROM sync_state WHERE key IN ('cursor:catches', 'cursor:species', 'species:version');
+  `,
 ];
 
 let ready: Promise<void> | null = null;
@@ -134,7 +181,8 @@ export async function setState(key: string, value: string | null) {
 export async function wipeLocalData() {
   await initDb();
   await transaction(async (tx) => {
-    for (const t of ['catches', 'profiles', 'friendships', 'species', 'outbox', 'photo_queue', 'sync_state']) {
+    for (const t of ['catches', 'profiles', 'friendships', 'species', 'species_profiles', 'waterbodies',
+      'waterbody_species', 'gear', 'spots', 'outbox', 'photo_queue', 'sync_state']) {
       await tx.runAsync(`DELETE FROM ${t} WHERE 1`);
     }
   });

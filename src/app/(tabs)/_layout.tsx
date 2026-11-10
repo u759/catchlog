@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
-import { Camera, LayoutGrid, Package, Trophy, UserRound } from 'lucide-react-native';
+import { BookOpen, Camera, LayoutGrid, Map as MapIcon, Package } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { colors, shadow } from '@/theme';
@@ -20,8 +20,8 @@ export default function TabsLayout() {
         options={{ title: 'Logbook', tabBarIcon: ({ color }) => <LayoutGrid size={22} color={color} /> }}
       />
       <Tabs.Screen
-        name="leaderboard"
-        options={{ title: 'Leaderboard', tabBarIcon: ({ color }) => <Trophy size={22} color={color} /> }}
+        name="dex"
+        options={{ title: 'Dex', tabBarIcon: ({ color }) => <BookOpen size={22} color={color} /> }}
       />
       <Tabs.Screen
         name="camera"
@@ -41,12 +41,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="cooler"
-        options={{ title: 'Cooler', tabBarIcon: ({ color }) => <Package size={22} color={color} /> }}
+        name="map"
+        options={{ title: 'Map', tabBarIcon: ({ color }) => <MapIcon size={22} color={color} /> }}
       />
       <Tabs.Screen
-        name="profile"
-        options={{ title: 'Profile', tabBarIcon: ({ color }) => <UserRound size={22} color={color} /> }}
+        name="gear"
+        options={{ title: 'Gear', tabBarIcon: ({ color }) => <Package size={22} color={color} /> }}
       />
     </Tabs>
   );

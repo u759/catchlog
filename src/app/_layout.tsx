@@ -36,6 +36,13 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="catch/[id]" />
         <Stack.Screen name="catch/new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="species/[id]" />
+        <Stack.Screen name="lake/[id]" />
+        <Stack.Screen name="gear/edit" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="spot/edit" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="leaderboard" />
+        <Stack.Screen name="profile" />
+        <Stack.Screen name="credits" />
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="sign-in" />

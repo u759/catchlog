@@ -109,7 +109,7 @@ export type NewPhoto = { uri: string; width?: number; height?: number };
 
 const COLUMNS = [
   'species_id', 'species_other', 'length_mm', 'weight_g', 'weight_estimated', 'caught_at', 'lat', 'lng',
-  'place_name', 'waterbody', 'lure', 'line_lb', 'notes', 'weather', 'released', 'visibility',
+  'place_name', 'waterbody', 'lure', 'line_lb', 'notes', 'weather', 'released', 'visibility', 'gear_id', 'waterbody_id',
 ] as const;
 
 /** Local SQLite values (0/1 booleans, JSON text). */

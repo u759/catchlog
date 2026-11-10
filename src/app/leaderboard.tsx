@@ -33,7 +33,7 @@ export default function Leaderboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <AppHeader title="Leaderboard" />
+      <AppHeader title="Leaderboard" back />
       <FlatList
         data={data}
         keyExtractor={(r) => r.user_id}

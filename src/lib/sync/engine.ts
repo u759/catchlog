@@ -1,6 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { AppState } from 'react-native';
 import { useSyncExternalStore } from 'react';
+import type { SQLiteBindValue } from 'expo-sqlite';
 
 import { supabase } from '@/lib/supabase';
 
@@ -17,7 +18,8 @@ import { deleteAllLocalPhotos, deleteLocalPhoto, localPhotoFile, processPhotoQue
  *        updated_at is stamped by the server, and the 60s overlap catches transactions that committed
  *        out of order. Rows with unsent local changes are skipped so they aren't overwritten.
  *        Deletes travel as tombstones (catches.deleted_at). Friendships are small: full refresh.
- *        Species: explicit version check (species_version RPC); nothing downloads unless it changed.
+ *        Reference tables (species, profiles, waterbodies, species-per-lake): explicit version check
+ *        (reference_version RPC); nothing downloads unless it changed.
  *  photos  Queued transfers in photo_queue (see photos.ts).
  *
  * Runs on sign-in, app foreground, reconnect, after local writes (debounced), every 5 min, and on
@@ -129,15 +131,28 @@ const since = (cursor: string | null) =>
 
 const b = (v: unknown) => (v ? 1 : 0);
 
-async function pullCatches(userId: string) {
-  const key = 'cursor:catches';
+type Row = Record<string, unknown> & { id: string; updated_at: string; deleted_at?: string | null };
+
+/**
+ * Pulls a user-owned table incrementally (rows changed since the cursor, minus a small overlap),
+ * applies tombstones as local deletes, and skips rows that still have unsent local changes.
+ */
+async function pullOwned(
+  table: 'catches' | 'gear' | 'spots',
+  userId: string,
+  columns: string[],
+  toLocal: (r: Row) => SQLiteBindValue[],
+  afterPage?: (rows: Row[], skip: Set<string>) => Promise<void>,
+) {
+  const key = `cursor:${table}`;
   const from = since(await getState(key));
-  const skip = await pendingIds('catches');
+  const skip = await pendingIds(table);
   let maxSeen: string | null = null;
+  const placeholders = columns.map(() => '?').join(', ');
 
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await supabase
-      .from('catches')
+      .from(table)
       .select('*')
       .eq('user_id', userId)
       .gte('updated_at', from)
@@ -145,40 +160,58 @@ async function pullCatches(userId: string) {
       .order('id')
       .range(offset, offset + PAGE - 1);
     if (error) throw error;
+    const rows = data as unknown as Row[];
 
     await transaction(async (txn) => {
-      for (const r of data) {
+      for (const r of rows) {
         if (!maxSeen || r.updated_at > maxSeen) maxSeen = r.updated_at;
         if (skip.has(r.id)) continue;
         if (r.deleted_at) {
-          await txn.runAsync('DELETE FROM catches WHERE id = ?', [r.id]);
+          await txn.runAsync(`DELETE FROM ${table} WHERE id = ?`, [r.id]);
           continue;
         }
-        await txn.runAsync(
-          `INSERT OR REPLACE INTO catches (id, user_id, species_id, species_other, length_mm, weight_g, weight_estimated,
-             caught_at, lat, lng, place_name, waterbody, lure, line_lb, notes, weather, photo_path, released, visibility,
-             created_at, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-          [
-            r.id, r.user_id, r.species_id, r.species_other, r.length_mm, r.weight_g, b(r.weight_estimated),
-            r.caught_at, r.lat, r.lng, r.place_name, r.waterbody, r.lure, r.line_lb, r.notes,
-            r.weather ? JSON.stringify(r.weather) : null, r.photo_path, b(r.released), r.visibility,
-            r.created_at, r.updated_at,
-          ],
-        );
+        await txn.runAsync(`INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`, toLocal(r));
       }
     });
-
-    // Deleted catches: drop their local photo. Missing photos: queue a download.
-    for (const r of data) {
-      if (!r.photo_path || skip.has(r.id)) continue;
-      if (r.deleted_at) deleteLocalPhoto(r.photo_path);
-      else if (!localPhotoFile(r.photo_path).exists) await queuePhoto(r.photo_path, 'download');
-    }
-    if (data.length < PAGE) break;
+    if (afterPage) await afterPage(rows, skip);
+    if (rows.length < PAGE) break;
   }
   if (maxSeen) await setState(key, maxSeen);
 }
+
+const CATCH_COLUMNS = [
+  'id', 'user_id', 'species_id', 'species_other', 'length_mm', 'weight_g', 'weight_estimated', 'caught_at', 'lat', 'lng',
+  'place_name', 'waterbody', 'lure', 'line_lb', 'notes', 'weather', 'photo_path', 'released', 'visibility', 'gear_id',
+  'waterbody_id', 'created_at', 'updated_at',
+];
+
+const pullCatches = (userId: string) =>
+  pullOwned(
+    'catches',
+    userId,
+    CATCH_COLUMNS,
+    (r) =>
+      CATCH_COLUMNS.map((c) => {
+        const v = r[c];
+        if (c === 'weather') return v ? JSON.stringify(v) : null;
+        if (c === 'weight_estimated' || c === 'released') return b(v);
+        return (v ?? null) as SQLiteBindValue;
+      }),
+    async (rows, skip) => {
+      // Deleted catches: drop their local photo. Missing photos: queue a download (offline viewing).
+      for (const r of rows) {
+        const path = r.photo_path as string | null;
+        if (!path || skip.has(r.id)) continue;
+        if (r.deleted_at) deleteLocalPhoto(path);
+        else if (!localPhotoFile(path).exists) await queuePhoto(path, 'download');
+      }
+    },
+  );
+
+const GEAR_COLUMNS = ['id', 'user_id', 'category', 'subtype', 'brand', 'name', 'color', 'size', 'weight_g', 'hook_size',
+  'quantity', 'notes', 'created_at', 'updated_at'];
+const SPOT_COLUMNS = ['id', 'user_id', 'name', 'lat', 'lng', 'depth_m', 'notes', 'waterbody_id', 'created_at', 'updated_at'];
+const plain = (cols: string[]) => (r: Row) => cols.map((c) => (r[c] ?? null) as SQLiteBindValue);
 
 async function pullProfile() {
   if ((await pendingIds('profiles')).size > 0) return;
@@ -239,56 +272,115 @@ async function pullFriendships(userId: string) {
 }
 
 /**
- * Species is admin-managed reference data, so it uses an explicit version check:
- * 1. Ask the server for its version ("count:latest updated_at"). Same as ours → done (one tiny request).
- * 2. Otherwise: if the row count changed (added/removed species) or we have nothing, reload everything;
- *    else fetch only rows updated after our cursor (no overlap needed: only migrations write species).
+ * Reference tables (admin-managed, read-only for users) use an explicit version check:
+ * 1. reference_version(table) = "count:latest updated_at". Same as ours → nothing to download.
+ * 2. Otherwise: if the row count changed (rows added/removed) or we have nothing, reload everything
+ *    (dropping local rows the server no longer has); else fetch only rows updated after our cursor.
  */
-async function pullSpecies() {
-  const { data: version, error: versionError } = await supabase.rpc('species_version');
+type RefTable = {
+  table: 'species' | 'species_profiles' | 'waterbodies' | 'waterbody_species';
+  select: string;
+  order: string[]; // stable keyset: updated_at + primary key column(s)
+  pk: string[];
+  columns: string[]; // local columns, in insert order
+  toLocal: (r: Row) => SQLiteBindValue[];
+};
+
+async function pullReference(t: RefTable) {
+  const { data: version, error: versionError } = await supabase.rpc('reference_version', { p_table: t.table });
   if (versionError) throw versionError;
-  if (version && version === (await getState('species:version'))) return;
+  if (version && version === (await getState(`ref:${t.table}:version`))) return;
 
   const serverCount = Number(String(version).split(':')[0]);
-  const local = await db.getFirstAsync<{ n: number }>('SELECT count(*) AS n FROM species');
-  const cursor = await getState('cursor:species');
+  const local = await db.getFirstAsync<{ n: number }>(`SELECT count(*) AS n FROM ${t.table}`);
+  const cursor = await getState(`ref:${t.table}:cursor`);
   const fullReload = !cursor || serverCount !== local?.n;
 
   let maxSeen: string | null = cursor;
   const seen = new Set<string>();
+  const placeholders = t.columns.map(() => '?').join(', ');
   for (let offset = 0; ; offset += PAGE) {
-    let q = supabase
-      .from('species')
-      .select('id, common_name, common_name_fr, scientific_name, family, game_fish, in_canada, regions, lw_a, lw_b, max_length_mm, freshwater, saltwater, updated_at');
+    let q = supabase.from(t.table).select(t.select);
     if (!fullReload) q = q.gt('updated_at', cursor!);
-    const { data, error } = await q.order('updated_at').order('id').range(offset, offset + PAGE - 1);
+    for (const col of t.order) q = q.order(col);
+    const { data, error } = await q.range(offset, offset + PAGE - 1);
     if (error) throw error;
+    const rows = data as unknown as Row[];
     await transaction(async (txn) => {
-      for (const s of data) {
-        seen.add(s.id);
-        if (!maxSeen || s.updated_at > maxSeen) maxSeen = s.updated_at;
-        await txn.runAsync(
-          `INSERT OR REPLACE INTO species (id, common_name, common_name_fr, scientific_name, family, game_fish, in_canada,
-             regions, lw_a, lw_b, max_length_mm, freshwater, saltwater, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            s.id, s.common_name, s.common_name_fr, s.scientific_name, s.family, b(s.game_fish), b(s.in_canada),
-            JSON.stringify(s.regions ?? []), s.lw_a, s.lw_b, s.max_length_mm,
-            s.freshwater == null ? null : b(s.freshwater), s.saltwater == null ? null : b(s.saltwater), s.updated_at,
-          ],
-        );
+      for (const r of rows) {
+        seen.add(t.pk.map((k) => String(r[k])).join('|'));
+        if (!maxSeen || r.updated_at > maxSeen) maxSeen = r.updated_at;
+        await txn.runAsync(`INSERT OR REPLACE INTO ${t.table} (${t.columns.join(', ')}) VALUES (${placeholders})`, t.toLocal(r));
       }
     });
-    if (data.length < PAGE) break;
+    if (rows.length < PAGE) break;
   }
-  if (fullReload && seen.size > 0) {
-    // Drop species that no longer exist on the server.
-    const rows = await db.getAllAsync<{ id: string }>('SELECT id FROM species');
-    for (const { id } of rows) if (!seen.has(id)) await write('DELETE FROM species WHERE id = ?', [id]);
+  if (fullReload) {
+    const keyExpr = t.pk.join(" || '|' || ");
+    const localKeys = await db.getAllAsync<{ k: string }>(`SELECT ${keyExpr} AS k FROM ${t.table}`);
+    const gone = localKeys.filter((r) => !seen.has(r.k)).map((r) => r.k);
+    if (gone.length) {
+      await transaction(async (txn) => {
+        for (const k of gone) await txn.runAsync(`DELETE FROM ${t.table} WHERE ${keyExpr} = ?`, [k]);
+      });
+    }
   }
-  if (maxSeen) await setState('cursor:species', maxSeen);
-  await setState('species:version', version);
+  if (maxSeen) await setState(`ref:${t.table}:cursor`, maxSeen);
+  await setState(`ref:${t.table}:version`, version);
 }
+
+const json = (v: unknown) => (v == null ? null : JSON.stringify(v));
+const nb = (v: unknown) => (v == null ? null : b(v));
+
+const REFERENCE: RefTable[] = [
+  {
+    table: 'species',
+    select: 'id, common_name, common_name_fr, scientific_name, family, order_name, dex_no, game_fish, in_canada, regions, lw_a, lw_b, max_length_mm, freshwater, saltwater, updated_at',
+    order: ['updated_at', 'id'],
+    pk: ['id'],
+    columns: ['id', 'common_name', 'common_name_fr', 'scientific_name', 'family', 'order_name', 'dex_no', 'game_fish',
+      'in_canada', 'regions', 'lw_a', 'lw_b', 'max_length_mm', 'freshwater', 'saltwater', 'updated_at'],
+    toLocal: (s) => [s.id, s.common_name, s.common_name_fr, s.scientific_name, s.family, s.order_name, s.dex_no,
+      b(s.game_fish), b(s.in_canada), JSON.stringify(s.regions ?? []), s.lw_a, s.lw_b, s.max_length_mm,
+      nb(s.freshwater), nb(s.saltwater), s.updated_at] as SQLiteBindValue[],
+  },
+  {
+    table: 'species_profiles',
+    select: 'species_id, summary, summary_url, habitat, environment, migration, depth_min_m, depth_max_m, temp_pref_min_c, temp_pref_max_c, spawning_months, feeding, diet, id_features, max_weight_g, longevity_years, iucn_status, canada_status, canada_notes, image_url, image_thumb_url, image_author, image_license, image_page_url, updated_at',
+    order: ['updated_at', 'species_id'],
+    pk: ['species_id'],
+    columns: ['species_id', 'summary', 'summary_url', 'habitat', 'environment', 'migration', 'depth_min_m', 'depth_max_m',
+      'temp_pref_min_c', 'temp_pref_max_c', 'spawning_months', 'feeding', 'diet', 'id_features', 'max_weight_g',
+      'longevity_years', 'iucn_status', 'canada_status', 'canada_notes', 'image_url', 'image_thumb_url', 'image_author',
+      'image_license', 'image_page_url', 'updated_at'],
+    toLocal: (p) => [p.species_id, p.summary, p.summary_url, p.habitat, p.environment, p.migration, p.depth_min_m,
+      p.depth_max_m, p.temp_pref_min_c, p.temp_pref_max_c, json(p.spawning_months), p.feeding, p.diet, p.id_features,
+      p.max_weight_g, p.longevity_years, p.iucn_status, p.canada_status, p.canada_notes, p.image_url, p.image_thumb_url,
+      p.image_author, p.image_license, p.image_page_url, p.updated_at] as SQLiteBindValue[],
+  },
+  {
+    table: 'waterbodies',
+    select: 'id, region, kind, name, area_ha, max_depth_m, mean_depth_m, depth_maps, lat, lng, bbox, updated_at',
+    order: ['updated_at', 'id'],
+    pk: ['id'],
+    columns: ['id', 'region', 'kind', 'name', 'area_ha', 'max_depth_m', 'mean_depth_m', 'depth_maps', 'lat', 'lng',
+      'west', 'south', 'east', 'north', 'updated_at'],
+    toLocal: (w) => {
+      const bb = (w.bbox as number[] | null) ?? [null, null, null, null];
+      return [w.id, w.region, w.kind, w.name, w.area_ha, w.max_depth_m, w.mean_depth_m, json(w.depth_maps ?? []),
+        w.lat, w.lng, bb[0], bb[1], bb[2], bb[3], w.updated_at] as SQLiteBindValue[];
+    },
+  },
+  {
+    table: 'waterbody_species',
+    select: 'waterbody_id, species_id, source, observations, first_observed, last_observed, updated_at',
+    order: ['updated_at', 'waterbody_id', 'species_id', 'source'],
+    pk: ['waterbody_id', 'species_id', 'source'],
+    columns: ['waterbody_id', 'species_id', 'source', 'observations', 'first_observed', 'last_observed', 'updated_at'],
+    toLocal: (r) => [r.waterbody_id, r.species_id, r.source, r.observations, r.first_observed, r.last_observed,
+      r.updated_at] as SQLiteBindValue[],
+  },
+];
 
 // ── scheduling ──────────────────────────────────────────────────────────────
 let userId: string | null = null;
@@ -305,9 +397,11 @@ async function runOnce() {
     await push();
     // Sequential: each pull writes in its own exclusive transaction.
     await pullCatches(userId);
+    await pullOwned('gear', userId, GEAR_COLUMNS, plain(GEAR_COLUMNS));
+    await pullOwned('spots', userId, SPOT_COLUMNS, plain(SPOT_COLUMNS));
     await pullProfile();
     await pullFriendships(userId);
-    await pullSpecies();
+    for (const t of REFERENCE) await pullReference(t);
     // Drain due photo transfers (failed ones back off and wait for a later run).
     for (let i = 0; i < 20 && status.online; i++) {
       if ((await processPhotoQueue()) === 0) break;

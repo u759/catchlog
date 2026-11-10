@@ -24,6 +24,9 @@ import { Button, Chip, EmptyState, Field, InfoPill } from '@/components/ui';
 import { saveCatch, useCatch, useUserId } from '@/features/catches/hooks';
 import { type CatchView, parseTs } from '@/features/catches/model';
 import { regionCodes, searchSpecies, useSpeciesIndex } from '@/features/catches/speciesSearch';
+import { useGearList } from '@/features/gear/hooks';
+import { isLure } from '@/features/gear/taxonomy';
+import { detectWaterbody, speciesInWaterbody, type Waterbody } from '@/features/waterbodies/hooks';
 import { useUnits } from '@/features/profile/hooks';
 import {
   fetchCurrentWeather,
@@ -95,6 +98,30 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
   const [visibility, setVisibility] = useState<Visibility>((existing?.visibility as Visibility) ?? 'friends');
   const [saving, setSaving] = useState(false);
   const [regions, setRegions] = useState<string[]>([]); // province codes, for species suggestions
+  const [gearId, setGearId] = useState<string | null>(existing?.gear_id ?? null);
+  const [lake, setLake] = useState<Waterbody | null>(null);
+  const [lakeSpecies, setLakeSpecies] = useState<Set<string>>(new Set());
+  const { data: gear } = useGearList();
+  const lures = useMemo(() => gear.filter((g) => isLure(g.category)).slice(0, 10), [gear]);
+
+  // Lake at the catch location (local, works offline). Pre-fills the waterbody name and boosts
+  // species recorded in that lake in the suggestions.
+  useEffect(() => {
+    if (!coords) return;
+    let cancelled = false;
+    detectWaterbody(coords.lat, coords.lng)
+      .then(async (w) => {
+        if (cancelled || !w) return;
+        setLake(w);
+        setWaterbody((cur) => cur || w.name || '');
+        setLakeSpecies(await speciesInWaterbody(w.id));
+        if (w.region) setRegions((r) => (r.length ? r : [w.region]));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [coords]);
 
   // New catch: grab GPS (works offline), then best-effort place name + weather (need signal).
   useEffect(() => {
@@ -131,8 +158,8 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
   const selectedSpecies = speciesId ? speciesIndex.byId.get(speciesId) : undefined;
   const suggestions = useMemo(() => {
     if (selectedSpecies && selectedSpecies.common_name === speciesText) return [];
-    return searchSpecies(speciesIndex, speciesText, regions);
-  }, [speciesIndex, speciesText, selectedSpecies, regions]);
+    return searchSpecies(speciesIndex, speciesText, regions, 8, lakeSpecies);
+  }, [speciesIndex, speciesText, selectedSpecies, regions, lakeSpecies]);
 
   const lengthMm = parseLength(length, units);
   const estimateG = estimateWeightG(lengthMm, selectedSpecies);
@@ -194,6 +221,8 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
           waterbody: waterbody.trim() || null,
           weather,
           lure: lure.trim() || null,
+          gear_id: gearId,
+          waterbody_id: lake?.id ?? existing?.waterbody_id ?? null,
           line_lb: line ? Number.parseFloat(line) || null : null,
           notes: notes.trim() || null,
           released,
@@ -332,10 +361,34 @@ function CatchForm({ existing }: { existing?: CatchView | null }) {
         {/* Tackle */}
         <View style={styles.row}>
           <View style={{ flex: 2 }}>
-            <Field label="Lure / bait" placeholder="Yellow crankbait" value={lure} onChangeText={setLure} />
+            <Field
+              label="Lure / bait"
+              placeholder="Yellow crankbait"
+              value={lure}
+              onChangeText={(t) => {
+                setLure(t);
+                if (gearId && gear.find((g) => g.id === gearId)?.name !== t) setGearId(null);
+              }}
+            />
           </View>
           <Field label="Line" keyboardType="decimal-pad" placeholder="12" value={line} onChangeText={setLine} suffix="lb" />
         </View>
+
+        {lures.length > 0 && (
+          <View style={styles.chips}>
+            {lures.map((g) => (
+              <Chip
+                key={g.id}
+                label={g.catches ? `${g.name} · ${g.catches}` : g.name}
+                selected={gearId === g.id}
+                onPress={() => {
+                  setGearId(gearId === g.id ? null : g.id);
+                  setLure(gearId === g.id ? '' : g.name);
+                }}
+              />
+            ))}
+          </View>
+        )}
 
         <Field label="Notes" placeholder="How'd it go down?" value={notes} onChangeText={setNotes} multiline style={{ minHeight: 88, fontSize: 16, color: colors.text, textAlignVertical: 'top', paddingVertical: space.md }} />
 
