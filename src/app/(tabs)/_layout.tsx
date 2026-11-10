@@ -23,7 +23,8 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 88, paddingTop: 6 },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        // Tab labels are the platform's small tab size; the weight matches the app's labels.
+        tabBarLabelStyle: { fontWeight: '600' },
       }}>
       <Tabs.Screen
         name="index"

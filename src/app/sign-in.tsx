@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
 import { isGoogleConfigured, sendEmailCode, signInWithGoogle, verifyEmailCode } from '@/lib/auth';
-import { colors, radius, space } from '@/theme';
+import { colors, radius, space, type } from '@/theme';
 
 type Busy = null | 'google' | 'send' | 'verify';
 
@@ -142,23 +142,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 34, lineHeight: 40, fontWeight: '700', color: colors.onPrimary },
-  tagline: { fontSize: 16, color: muted, textAlign: 'center', maxWidth: 300, lineHeight: 22 },
+  title: { ...type.largeTitle, color: colors.onPrimary },
+  tagline: { ...type.body, color: muted, textAlign: 'center', maxWidth: 300 },
   bottom: { gap: space.md, paddingBottom: space.lg },
   divider: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: muted },
-  dividerText: { color: muted, fontSize: 13 },
+  dividerText: { ...type.caption, color: muted },
   input: {
     height: 52,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     paddingHorizontal: space.lg,
-    fontSize: 16,
-    color: colors.text,
+    ...type.body,
   },
-  codeInput: { fontSize: 24, letterSpacing: 6, textAlign: 'center', fontWeight: '700' },
-  prompt: { color: colors.onPrimary, fontSize: 15, textAlign: 'center' },
+  codeInput: { ...type.stat, letterSpacing: 6, textAlign: 'center' },
+  prompt: { ...type.body, color: colors.onPrimary, textAlign: 'center' },
   links: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space.xs },
-  link: { color: colors.onPrimary, fontSize: 15, lineHeight: 20, fontWeight: '600' },
-  error: { color: colors.onPrimaryDanger, textAlign: 'center', fontSize: 14 },
+  link: { ...type.headline, color: colors.onPrimary },
+  error: { ...type.secondary, color: colors.onPrimaryDanger, textAlign: 'center' },
 });

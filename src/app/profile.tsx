@@ -225,10 +225,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   nameInput: {
     flex: 1,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '700',
-    color: colors.text,
+    ...type.title,
     borderBottomWidth: 1,
     borderBottomColor: colors.primary,
     paddingVertical: 2,
